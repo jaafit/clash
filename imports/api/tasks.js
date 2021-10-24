@@ -17,6 +17,7 @@ Meteor.methods({
       owner: this.userId,
       username: Meteor.users.findOne(this.userId).username
     })
+
   },
 
   'tasks.remove'(taskId) {
