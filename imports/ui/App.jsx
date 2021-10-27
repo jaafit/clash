@@ -1,86 +1,108 @@
 import React, { useState } from 'react';
+import {Player} from './Player';
+import * as C from '../models/components'
+import {simulateCombat, getPlayableCardTypes} from '../models/combat'
 import { useTracker } from 'meteor/react-meteor-data';
 import _ from 'lodash';
-//import { Task } from './Task';
-//import { Tasks } from '/imports/api/tasks';
-
-const toggleChecked = ({ _id, isChecked }) => {
-  Meteor.call('tasks.setChecked', _id, !isChecked);
-};
-
-const togglePrivate = ({ _id, isPrivate }) => {
-  Meteor.call('tasks.setPrivate', _id, !isPrivate);
-};
-
-battleOptions = {
-    city: false,
-    sea: false,
-    fort: false,
-}
-playerOptions = {
-    greatArena: false,
-    greatWall: false,
-    warships: false,
-    steelWeapons: false,
-    metalurgy: false,
-    chinaFireworks: false,
-    celtsTribalWarfare: 0,
-    greeceSpartans: false,
-    japanHorsemanship: false,
-    persiaElephants: false,
-    persiaImmortals: false,
-    food: 0,
-    wood: 0,
-    ore: 0,
-    gold: 0,
-    culture: 0,
-    mood: 0,
-
-
-}
-
-const deleteTask = ({ _id }) => Meteor.call('tasks.remove', _id);
 
 export const App = () => {
-  const filter = {};
+    const initialState = {
+        fort: false,
+        sea: false,
+        city: true,
+        amphibious: false,
+        eclipse: false,
+        us: {},
+        them: {}
+    };
+    ['us', 'them'].forEach(function(who)  {
+        initialState[who] = {
+            civ: C.NOCIV,
+            leader: C.NOLEADER,
+            abilityValue: '',
+            saveLeader: true,
+            attacking: who === 'us',
+            cards: [],
+            wonders: Array(C.Wonders.length).fill(false),
+            advances: Array(C.Advances.length).fill(false), // tribal warfare is scalar
+            army: 'lice',
+            resources: {food: 7, wood: 7, ore: 7, gold: 7, culture: 10,
+                need_food: false, need_wood: false, need_ore: false, need_culture: false
+            }
+        }
+    });
 
-  const [fortress, setFortress] = useState(false);
-
-  /*if (hideCompleted) {
-    _.set(filter, 'checked', false);
-  }*/
+    const [state, setState] =  useState(initialState)
 
 
+    const mutuallyExclude = function(thisPlayer, thatPlayer) {
+        thatPlayer.attacking = !thisPlayer.attacking;
+        thisPlayer.wonders.forEach(function(have, i) {if (have) thatPlayer.wonders[i] = false;});
+        if (thatPlayer.civ === thisPlayer.civ)
+            thatPlayer.civ = C.NOCIV;
+    }
+
+    const handleOurOptionChange = function(player) {
+        mutuallyExclude(player, state.them); // todo needs to use a function so that we use actual state
+        setState({...state});
+    };
+
+    const handleTheirOptionChange = function(player) {
+        mutuallyExclude(player, state.us);
+        setState({...state});
+    };
+
+    const handleChangeOption = function(e) {
+        let { value, name } = e.target;
+        setState({...state, [name]: value});
+    }
+
+    const handleChangeCheckbox = function(e) {
+        let {value, name} = e.target;
+        setState({...state, [name]: !state[name]})
+    }
+    const go = function() {
+        const [pWin, avgStanding, players] = simulateCombat(state, 10000);
+        setState({...state, pWin:pWin});
+        console.log(state);
+    }
+
+    const playableCardTypesYou = getPlayableCardTypes(state, state.us);
+    const playableCardTypesThem = getPlayableCardTypes(state, state.them);
 
   return (
-    <div className="simple-todos-react">
+    <div className="clash-sim">
       <h1>Clash of Cultures Combat Simulator</h1>
 
       <div className="filters">
         <label>
+            Fortress
           <input
+              name="fort"
               type="checkbox"
-              readOnly
-              checked={ Boolean(fortress) }
-              onClick={() => setFortress(!fortress)}
+              checked={ state.fort }
+              onChange={handleChangeCheckbox}
           />
-          Fortress
-        </label>
+        </label>&nbsp;&nbsp;
+          <label>City
+              <input name="city" type="checkbox" checked={state.city} onChange={handleChangeCheckbox}/>
+          </label>&nbsp;&nbsp;
+          <label>Amphibious
+              <input name="amphibious" type="checkbox" checked={state.amphibious} onChange={handleChangeCheckbox}/>
+          </label>&nbsp;&nbsp;
+          <label>Eclipse
+              <input name="eclipse" type="checkbox" checked={state.eclipse} onChange={handleChangeCheckbox}/>
+          </label>
+
       </div>
 
-        <div>
-            Fortress = {fortress ? 'yes':'no'}
-        </div>
+        <Player playerName={'You'} options={state.us} onOptionChange={handleOurOptionChange} playableCardTypes={playableCardTypesYou}/>
 
-        {/*<ul className="tasks">
-        { tasks.map(task => <Task
-          key={ task._id }
-          task={ task }
-          onCheckboxClick={toggleChecked}
-          onDeleteClick={deleteTask}
-          onTogglePrivateClick={togglePrivate}
-        />) }
-      </ul>*/}
+        <Player playerName={'Them'} options={state.them} onOptionChange={handleTheirOptionChange} playableCardTypes={playableCardTypesThem}/>
+
+        <button onClick={go}>Go</button>
+
+        {state.pWin && <p>Win probability: {Math.round(state.pWin*100)}%</p>}
 
     </div>
   );

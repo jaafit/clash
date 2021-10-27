@@ -1,5 +1,5 @@
 import * as C from './components';
-
+import {cloneDeep} from 'lodash';
 
 //simulateEclipse = 'eclipse' in sys.argv
 
@@ -14,6 +14,31 @@ Object.defineProperties(Array.prototype, {
         }
     }
 });
+String.prototype.count=function(c) {
+    let result = 0, i = 0;
+    for(i;i<this.length;i++)if(this[i]===c)result++;
+    return result;
+};
+function def(v,d) { return v !== undefined ? v : d; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function shuffle(a) {
+    let j, x, i;
+    for (i = a.length - 1; i > 0; i--) {
+        j = Math.floor(Math.random() * (i + 1));
+        x = a[i];
+        a[i] = a[j];
+        a[j] = x;
+    }
+    return a;
+}
+
+function logGameState(players) {
+    console.log('---------------------------');
+    for (let i = 1; i< arguments.length; i++)
+        console.log(arguments[i])
+    console.log(players.us.army, 'vs', players.them.army);
+    console.log(players.us.resources, 'vs', players.them.resources);
+}
 
 //todo figure out best way to spend resources if scarce
 // resources:
@@ -27,39 +52,26 @@ Object.defineProperties(Array.prototype, {
 // 1culture for Immortals +1
 // 1culture for Pygmalion's hit cancel (once/battle)
 // 2culture for Qin's hit cancel (once/battle)
-function resetResources(options) {
+/*function resetResources(options) {
     ['food', 'wood', 'ore', 'gold', 'culture'].forEach(function(res) {
-        if (options[res] < 0)
-            options['need_'+res] = true;
-        options[res] = options['starting_' + res];
+        if (options.resources[res] < 0)
+            options.resources['need_'+res] = true;
+        options.resources[res] = options.resources['starting_' + res];
     })
-}
-function haveResource(options, amt, type) {
-    let have = options[type] + options['gold'];
+}*/
+function haveResource(player, amt, type) {
+    let have = player.resources[type];
+    if (type !== 'culture')
+        have += player.resources['gold'];
     if (have < amt)
-        options[type]--; // flag it for ui
-    return have
+        player[type]--; // flag it for ui
+    return have >= amt
 }
-function spendResource(options, amt, type) {
-    options[type] = Math.max(0, options[type] - amt)
-    amt -= options[type];
-    options['gold'] -= amt;
-}
-
-
-// todo solar eclipse
-
-function def(v,d) { return v !== undefined ? v : d; }
-function randInt(max, min) { return Math.floor(Math.random() * def(max, 1)) + def(min, 0); }
-function shuffle(a) {
-    let j, x, i;
-    for (i = a.length - 1; i > 0; i--) {
-        j = Math.floor(Math.random() * (i + 1));
-        x = a[i];
-        a[i] = a[j];
-        a[j] = x;
-    }
-    return a;
+function spendResource(player, amt, type) {
+    player[type] = Math.max(0, player[type] - amt)
+    amt -= player[type];
+    if (type !== 'culture')
+        player['gold'] -= amt;
 }
 
 function addCards(cards, cardType, seenCards) {
@@ -68,16 +80,16 @@ function addCards(cards, cardType, seenCards) {
 }
 function getAllCards(seenCards) {
     let cards = [];    
-    C.AllCards.forEach(function(c) { addCards(cards, c, seenCards);})
+    C.Cards.forEach(function(c, i) { addCards(cards, i, seenCards);})
     return cards;
 }
 let UnseenCards = [];
 
 // you tell ourArmy which cards you're playing in which order
 // we'll work out which cards your opponents might have and randomly play for theirArmy
-function getPlayableCardTypes(options, ourOptions) {
+export function getPlayableCardTypes(options, us) {
     let playable = [];
-    if (!ourOptions.barbarians)
+    if (us.barbarian)
         return playable;
     
     if (!options.sea) {
@@ -86,412 +98,464 @@ function getPlayableCardTypes(options, ourOptions) {
         playable.push(C.ROUTING);
     }
 
-    if (!ourOptions.attacking) {
+    if (!us.attacking) {
         playable.push(C.DEFIANT);
         playable.push(C.PREPARED);
         // addCards(playable, C.RETREAT); no
     }
 
-    if (!ourOptions.attacking && options.city) {
+    if (!us.attacking && options.city) {
         playable.push(C.PEOPLE);
         playable.push(C.UPGRADED);
     }
 
-    if (!ourOptions.attacking || !options.city)
+    if (!(us.attacking && options.city))
         playable.push(C.GROUND);
 
-    if (ourOptions.attacking) {
+    if (us.attacking) {
         playable.push(C.FLANKING);
         playable.push(C.WEDGE);
     }
 
-    if (ourOptions.attacking && options.city)
+    if (us.attacking && options.city)
         playable.push(C.SIEGE);
 
     playable = playable.concat([C.MORALE, C.MARTYR, C.SURPRISE, C.SCOUTS]);
 
+    // filter out based on army/ship/fortress
+    // todo can Cyrus play these though?
+    playable = playable.filter(function(c) {
+        return C.Cards[c].army && !options.sea
+            || C.Cards[c].ship && options.sea
+            || C.Cards[c].fort && options.fort;
+    })
+
     return playable;
 }
 
-function getPlayableCards(options, ourOptions, theirOptions) {
+/*function getPlayableCards(options, us, them) {
     let playable = [];
-    if (!ourOptions.hasCards)
+    if (!us.cards.length)
         return playable;
 
-    let playableTypes = getPlayableCardTypes(options, ourOptions)
-    playableTypes.forEach(function(t) { addCards(playable, t, theirOptions.cards) });
+    let playableTypes = getPlayableCardTypes(options, us)
+    playableTypes.forEach(function(t) { addCards(playable, t, them.cards) });
     return playable;
-}
+}*/
 
 
-function preRollModifier(ourArmy, theirArmy, options, ourOptions, theirOptions, round) {
+function preRollEffects(options, us, them, round) {
+    // todo Emperor Jimmu is a special case where a leader can affect battle when not present.
+    let cvb = {cv: 0, bonusCV: 0, blocks:0};
 
-    let modifier = 0;
-    if (ourOptions.attacking && ~theirOptions.wonders.indexOf(C.GREATWALL) && round === 0)
-        modifier -= 2;
+    if (!us.attacking && options.fort && round === 0) {
+        if (them.advances[C.SIEGECRAFT] && haveResource(them, 2, 'ore'))
+            spendResource(them, 2, 'ore');
+        else
+            cvb.blocks++;
+    }
 
-    if (ourOptions.steelWeapons) {
-        let needOre = !~ourOptions.advances.indexOf(C.METALLURGY) || ~theirOptions.advances.indexOf(C.STEEL_WEAPONS)
-        if (!needOre || haveResource(ourOptions, 1, 'ore')) {
-            if (theirOptions.steelWeapons)
-                modifier++;
+    if (us.attacking && them.wonders[C.GREATWALL] && round === 0)
+        cvb.bonusCV -= 2;
+
+    if (us.advances[C.STEEL_WEAPONS]) {
+        let needOre = !us.advances[C.METALLURGY] || them.advances[C.STEEL_WEAPONS]
+        if (!needOre || haveResource(us, 1, 'ore')) {
+            if (them.advances[C.STEEL_WEAPONS])
+                cvb.bonusCV++;
             else
-                modifier += 2;
+                cvb.bonusCV += 2;
             if (needOre)
-                spendResource(ourOptions, 1, 'ore');
+                spendResource(us, 1, 'ore');
         }
     }
 
-    if (ourOptions.fanaticism && round === 0)
-        modifier += 2;
+    if (us.advances[C.FANATICISM] && round === 0)
+        cvb.bonusCV += 2;
     
-    if (~ourOptions.advances.indexOf(C.IMMORTALS)) {
-        if (ourOptions.culture <= 0) ourOptions.culture--; // flag that we ran out
-
-        let spend = min(4, ourOptions.culture)
-        modifier += spend;
-        ourOptions.culture -= spend;
+    if (us.advances[C.IMMORTALS] && haveResource(us, 1, 'culture')) {
+        let spend = Math.min(4, us.resources.culture)
+        cvb.bonusCV += spend;
+        spendResource(us, spend, 'culture');
     }
     
-    if (options.sea && ~ourOptions.advances.indexOf(C.BIREMES)) {
-        if (round === 0 || !~theirOptions.advances.indexOf(C.WARSHIPS))
-            modifier += 2;
+    if (options.sea && us.advances[C.BIREMES]) {
+        if (round === 0 || !them.advances[C.WARSHIPS])
+            cvb.bonusCV += 2;
     }
 
-    if (theirOptions.playedCard === C.DEFIANT)
-        modifier -= ourArmy.length
+    if (us.advances[C.WARSHIPS] && round === 0)
+        if (options.sea || us.attacking && options.amphibious)
+            cvb.blocks++;
 
-    if (ourOptions.playedCard === C.MORALE)
-        modifier += 2;
+    if (us.playedCard === C.PELTASTS && !options.sea)
+        for (let i = 0; i < us.army.length; i++)
+            if (randInt(1,3) === 3)
+                cvb.blocks++; // todo this is only supposed to be "during remove casualties"
 
-    if (ourOptions.playedCard === C.SURPRISE) {
-        modifier += 1;
-    }
+    if (them.playedCard === C.DEFIANT && us.attacking)
+        cvb.bonusCV -= them.army.length
 
-    if (ourOptions.playedCard === C.SIEGE && !options.sea)
-        modifier += 1;
+    if (us.playedCard === C.MORALE)
+        cvb.bonusCV += 2;
 
-    if (ourOptions.playedCard === C.WEDGE && !options.sea && ourOptions.attacking)
-        modifier += theirArmy.length;
+    if (us.playedCard === C.UPGRADED && !us.attacking && options.city)
+        cvb.blocks++;
 
-    modifier += ourOptions.celtsTribalWarfare;
+    if (us.playedCard === C.SURPRISE)
+        cvb.bonusCV += 1;
 
-    return modifier;
+    if (us.playedCard === C.SIEGE && !options.sea)
+        cvb.bonusCV += 1;
+
+    if (us.playedCard === C.WEDGE && !options.sea && us.attacking)
+        cvb.bonusCV += them.army.length;
+
+    if (us.advances[C.TRIBAL_WARFARE] && !them.barbarian && !options.sea)
+        cvb.bonusCV += Math.min(4, us.advances[C.TRIBAL_WARFARE]);
+
+    if (us.leader === C.AHUITZOTL && us.abilityValue)
+        cvb.blocks++;
+
+    if (us.leader === C.NEBUCHADNEZZAR && options.city && us.attacking && us.abilityValue)
+        cvb.bonusCV += 2;
+
+    if (us.leader === C.NABOPOLASSAR && us.abilityValue)
+        cvb.bonusCV += 2;
+
+    if (us.leader === C.HANNO && options.sea)
+        cvb.bonusCV += 2;
+
+    return cvb;
 }
 
-function postRollModifier(ourCVB, roll, ourArmy, theirArmy, options, ourOptions, theirOptions, round) {
-    var bonusCap = 1000;
-    if (~theirOptions.advances.indexOf(C.ELEPHANTS) && ~theirArmy.indexOf('e'))
+function postRollEffects(cvb, options, us, them, round) {
+    let bonusCap = 1000;
+    if (them.advances[C.ELEPHANTS] && ~them.army.indexOf('e') && round === 0)
         bonusCap = 2
 
-    if (!ourOptions.attacking && ourOptions.fort && round === 0) {
-        if (~theirOptions.advances.indexOf(C.SIEGECRAFT) && haveResource(theirOptions, 2, 'ore'))
-            spendResource(theirOptions, 2, 'ore');
-        else
-            ourCVB['blocks']++;
-    }
-
-    if (!ourOptions.attacking && ~ourOptions.advances.indexOf(C.WARSHIPS) && round === 0)
-        ourCVB['blocks']++;
-
-    if (~ourOptions.advances.indexOf(C.FIREWORKS) && round === 0) {
-        if (haveResource(ourOptions, 1, 'food') && haveResource(ourOptions, 1, 'ore')) {
-            ourCVB['blocks'] += 1
-            spendResource(ourOptions, 1, 'food');
-            spendResource(ourOptions, 1, 'ore');
+    // todo conditional on being hit at all
+    if (us.advances[C.FIREWORKS] && round === 0) {
+        if (haveResource(us, 1, 'food') && haveResource(us, 1, 'ore')) {
+            cvb.blocks += 1
+            spendResource(us, 1, 'food');
+            spendResource(us, 1, 'ore');
         }
     }
 
-
-    if (ourOptions.playedCard === C.PELTASTS && !options.sea)
-        for (let i = 0; i < ourArmy.length; i++)
-            if (randInt(3) === 3)
-                ourCVB['blocks']++; // todo this is only supposed to be "during remove casualties"
-
-    if (ourOptions.playedCard === C.UPGRADED && !ourOptions.attacking && options.city)
-        ourCVB['blocks']++;
-
-    if (~ourOptions.wonders.indexOf(C.GREATARENA) && !ourOptions.usedArena && (ourCVB['cv'] + ourCVB['bonusCV']) % 5 === 4) {
-        if (ourCVB['bonusCV'] < bonusCap ) {
-            ourOptions.usedArena = true;
-            ourCVB['bonusCV'] += 1;
-        }
+    if (!options.sea && us.wonders[C.GREATARENA] && cvb['bonusCV'] < bonusCap
+        && !us.usedArena && (cvb['cv'] + cvb['bonusCV']) % 5 === 4 && haveResource(us, 1, 'culture')) {
+        us.usedArena = true;
+        spendResource(us, 1, 'culture');
+        cvb.bonusCV += 1;
     }
 
     // finally, cap the bonus CV at 2 against Persian elephants
-    if (bonusCap)
-        ourCVB['bonusCV'] = Math.min(bonusCap, ourCVB['bonusCV']);
+    cvb.bonusCV = Math.min(bonusCap, cvb.bonusCV);
 
     // now calculate hits
-    ourCVB['hits'] = Math.floor((ourCVB['cv'] + ourCVB['bonusCV']) / 5)
+    cvb.hits = Math.floor((cvb.cv + cvb.bonusCV) / 5)
 }
 
-function clashAbilities(army, roll, bonusCV, options, ourOptions, theirOptions, round) {
-    let eles = army.count('e');
-    let cavs = army.count('c');
-    let infs = army.count('i');
-    let blocks = 0;
-    let cv = 0;
+function clashAbilities(roll, cvb, options, us, them, round) {
+    let eles = us.army.count('e');
+    let cavs = us.army.count('c');
+    let infs = us.army.count('i');
     let canClash = true;
-    if (theirOptions.playedCard === C.GROUND && !(theirOptions.attacking && options.city))
+    if (them.playedCard === C.GROUND && !(them.attacking && options.city))
         canClash = false;
-    if (theirOptions.playedCard === C.SIEGE && theirOptions.attacking && options.city) {
-        if (haveResource(ourOptions, 2, 'food'))
-            spendResource(ourOptions, 2, 'food');
+    if (them.playedCard === C.SIEGE && them.attacking && options.city) {
+        if (haveResource(us, 2, 'food'))
+            spendResource(us, 2, 'food');
         else
             canClash = false;
     }
 
-    let oneFace = roll.indexof('1l')
-    if (~army.indexOf('l') && ~oneFace && canClash)
-        roll[oneFace] = C.Faces[randInt(11, 2)];
-    
+    let oneFace = roll.indexOf('1l')
+    let ri = randInt(2,11);
+    if (~us.army.indexOf('l') && ~oneFace && canClash) {
+        roll[oneFace] = C.Faces[ri];
+        if (!roll[oneFace])
+            debugger;
+    }
+
     let sorted = roll.sort(function(a, b) { return b[0] - a[0] }) // lower elephants go first
     sorted.forEach(function(r) {
-        cv += r[0]
+        cvb.cv += Number(r[0]);
 
         if (canClash) {            
             if (eles && r[1] === 'e') {
                 eles--;
-                blocks++
-                cv -= r[0]
+                cvb.blocks++
+                cvb.cv -= Number(r[0]);
             }
     
             if (cavs && r[1] === 'c') {
                 cavs--;
-                bonusCV += 2
-                if (~ourOptions.advances.indexOf(C.HORSEMANSHIP) && round === 0 && !ourOptions.attacking && options.fort)
-                    bonusCV++;
+                cvb.bonusCV += 2
+
+                us.usedHorsemanship = us.usedHorsemanship || false;
+                if (us.advances[C.HORSEMANSHIP] && round === 0 && !us.attacking && options.fort && !us.usedHorsemanship) {
+                    cvb.bonusCV++;
+                    us.usedHorsemanship = true;
+                }
             }
     
-            if (inf && r[1] === 'i') {
+            if (infs && r[1] === 'i') {
                 infs--;
-                bonusCV++
+                cvb.bonusCV++
             }
         }
     });
 
-    return {cv: cv, bonusCV: bonusCV, blocks:blocks};
+    return cvb;
 
 }
-function applyHits (army, hits, ourOptions) {
+function applyHits (player, hits) {
     if (hits <= 0)
-        return army
+        return;
 
-    /*let bestCompositions = {}
-    if (attacking)
-        bestCompositions = { 
-            1: ['e', 'c', 'l', 'i'],
-            2: ['el', 'ce', 'cl', 'ie', 'ic', 'il', 'ee', 'cc', 'ii'],
-            3: ['cel', 'iel', 'ice', 'icl', 'eel', 'cce', 'ccl', 'cee', 'iie', 'iic', 'iil', 'icc', 'iee', 'ccc', 'eee', 'iii'],
-        }
-    else
-        bestCompositions = {
-            1: ['e', 'c', 'l', 'i'],
-            2: ['el', 'cl', 'ce', 'ic', 'il', 'ie', 'cc', 'ee', 'ii'],
-            3: ['cel', 'icl', 'iel', 'ccl', 'ice', 'eel', 'cce', 'iil', 'icc', 'iic', 'cee', 'iie', 'ccc', 'iee', 'iii', 'eee']
-        }*/
-
-    let alive = army.length - hits;
-    if (alive <= 0)
-        return ''
+    let alive = player.army.length - hits;
+    if (alive <= 0) {
+        player.army = '';
+        return
+    }
 
     // find the best (first) subset that the original army had
-    for (let i = 0; i < ourOptions.subsets[alive].length; i++)
-        if (['l','i','c','e'].every(t => bestCompositions[i].count(t) <= army.count(t) ))
-            return bestCompositions[i]
+    const bestCompositions = player.subsets[alive];
+    for (let i = 0; i < bestCompositions.length; i++)
+        if (['l','i','c','e'].every(t => bestCompositions[i].count(t) <= player.army.count(t) )) {
+            player.army = bestCompositions[i];
+            return;
+        }
 }
 
-function preRollCards(ourArmy, options, ourOptions, theirOptions, round) {
-    if (ourOptions.playedCard === C.SCOUTS) {
-        if (thierOptions.playedCard in getPlayableCardTypes(options, ourOptions))
-            ourOptions.cards.push(theirOptions.playedCard)
-        theirOptions.playedCard = -1;
+function preRollCards(options, us, them, round) {
+    if (us.playedCard === C.SCOUTS) {
+        if (them.playedCard in getPlayableCardTypes(options, us))
+            us.cards.push(them.playedCard)
+        them.playedCard = undefined;
     }
 
-    if (ourOptions.playedCard === C.MARTYR || theirOption.playedCard === C.MARTYR)
-        ourArmy = applyHits(ourArmy, 1, ourOptions);
+    if (us.playedCard === C.MARTYR || them.playedCard === C.MARTYR)
+        applyHits(us, 1);
     
-    if (theirOptions.playedCard === C.MARTYR)
-        ourOptions.playedCard = -1; // todo some effects benefit from this
+    if (them.playedCard === C.MARTYR)
+        us.playedCard = undefined; // todo some effects benefit from this
 
-    if (theirOptions.playedCard === C.ARCHERS && !options.sea && randInt(3) === 3)
-        ourArmy = applyHits(ourArmy, 1, ourOptions);
+    if (them.playedCard === C.ARCHERS && !options.sea && randInt(1,3) === 3)
+        applyHits(us, 1);
 
-    return ourArmy;
 }
 
-function postCasualties(ourArmy, theirArmy, ourCVB, theirCVB, options, ourOptions, theirOptions, round) {
-    let ourKills = Math.min(ourCVB['hits'] - theirCVB['blocks'], theirArmy.length);
-    let theirKills = Math.min(theirCVB['hits'] - ourCVB['blocks'], ourArmy.length);
+function postCasualtiesEffects(ourCVB, theirCVB, options, us, them, round) {
+    let ourKills = Math.min(ourCVB['hits'] - theirCVB['blocks'], them.army.length);
+    let theirKills = Math.min(theirCVB['hits'] - ourCVB['blocks'], us.army.length);
 
-    if (theirOptions.playedCard === C.ROUTING && !options.sea) {
-        if (ourKills <= theirKills && randInt(3) === 3)
-            ourArmy = applyHits(ourArmy, 1, ourOptions); // cannot be canceled
+    if (us.playedCard === C.ROUTING && !options.sea) {
+        if (ourKills >= theirKills && randInt(1,3) === 3)
+            applyHits(them, 1); // cannot be canceled
     }
 
-    if (ourOptions.playedCard === C.SURPRISE && ourKills > 0) {
-        let card = UnseenCards.pop();
-        if (card in getPlayableCardTypes(options, ourOptions))
-            ourOptions.cards.push(card);
+    if (us.playedCard === C.SURPRISE && ourKills > 0) {
+        let card = UnseenCards.shift();
+        if (card in getPlayableCardTypes(options, us))
+            us.cards.push(card);
     }
-
-    return ourArmy;
 }
 
-export function roll (army, ourOptions, theirOptions, round) {
+export function roll (options, us, them, round) {
     let roll = [];
 
-    var extraRolls = 0;
-    if (round === 0 && !ourOptions.attacking && ourOptions.fort ) {
-        if (~theirOptions.advances[C.SIEGECRAFT] && countResource(theirOptions, 'wood'))
-            spendResource(theirOptions, 2, 'wood');
+    let extraRolls = 0;
+    if (round === 0 && !us.attacking && options.fort ) {
+        if (them.advances[C.SIEGECRAFT] && haveResource(them,2, 'wood'))
+            spendResource(them, 2, 'wood');
         else
             extraRolls++;
     }
-    if (ourOptions.playedCard === 'For the People' && options.city && !ourOptions.attacking)
+    if (us.playedCard === C.PEOPLE && options.city && !us.attacking)
         extraRolls++;
-    if (ourOptions.playedCard === 'Flanking' && ourOptions.attacking)
+    if (us.playedCard === C.FLANKING && us.attacking)
         extraRolls++;
-    if (ourOptions.playedCard === 'Prepared Defenses' && !ourOptions.attacking)
+    if (us.playedCard === C.PREPARED && !us.attacking)
         extraRolls++;
 
-    for (let i = 0; i < army.length + extraRolls; i++) {
-        let r = randInt(11, 0);
-        roll.push(Faces[r]);
+    for (let i = 0; i < us.army.length + extraRolls; i++) {
+        let r = randInt(0,11);
+        roll.push(C.Faces[r]);
     }
 
     return roll
 }
 
-
-// # Units can be ship, inf, cav, ele, leader, or can be ? which means the sim tries all possibilities to give you best choice.
-export function battle (ourArmy, theirArmy, options, startingRound=0) {
-    let fightOver = false;
-    let round = startingRound;
-    let playableCards = getPlayableCards(options, theirOptions, ourOptions)
-    playableCards = shuffle(playableCards);
-    UnseenCards = getAllCards(ourOptions.cards);
-    UnseenCards = shuffle(UnseenCards);
-    [options.us, options.them].forEach(function(opt) {resetResources(opt)})
-
-    while (!fightOver) {
-        let p = 0;
-        for (p = 0; p < playableCards.length; p++) {
-            let u = UnseenCards.indexOf(playableCards[p]);
-            if (~u) {
-                UnseenCards.splice(u, 1);
-                playableCards.splice(p, 1);
-                options.them.playedCard = playableCards[p];
-                break;
+function playCard(playableCards, us, them) {
+    // play our next card if possible
+    us.playedCard = undefined;
+    if (us.army.length < 5 && !(them.advances[C.SPARTANS] && us.army.length > them.army.length))
+        while (us.cards.length) {
+            let c = us.cards.shift();
+            if (us.cards[0] === -1) { // play a random card
+                for (let u = 0; u < UnseenCards.length; u++) {
+                    if (~playableCards.indexOf(UnseenCards[u])) {
+                        us.playedCard = UnseenCards[u];
+                        UnseenCards.splice(u, 1);
+                        return;
+                    }
+                }
+            }
+            else  // is it a known card type and playable?
+            if (~playableCards.indexOf(c)) {
+                us.playedCard = c;
+                return;
             }
         }
-        // play our next card if possible
-        if (options.us.cards.length && ourArmy.length < 5 && !(~options.them.advances.indexOf(C.SPARTANS) && ourArmy.length > theirArmy.length))
-            options.us.playedCard = option.us.cards.shift();
-        else
-            options.us.playedCard = -1;
+}
 
-        ourArmy = preRollCards(ourArmy, options, options.us, options.them, round);
-        theirArmy = preRollCards(theirArmy, options, options.them, options.us, round);
-        if (ourArmy === '' || theirArmy === '')
+// # Units can be ship, inf, cav, ele, leader
+export function battle (options, players, startingRound=0, debug=false) {
+    let fightOver = false;
+    let round = startingRound;
+    let ourPlayableCardTypes = getPlayableCardTypes(options, players.us);
+    let theirPlayableCardTypes = getPlayableCardTypes(options, players.them);
+    UnseenCards = getAllCards(players.us.cards.concat(players.them.cards));
+    UnseenCards = shuffle(UnseenCards);
+    players.us.cards = players.us.cards.slice(startingRound); //  skip cards if round starts later
+    players.them.cards = players.them.cards.slice(startingRound);
+
+    while (!fightOver) {
+        playCard(ourPlayableCardTypes, players.us, players.them);
+        playCard(theirPlayableCardTypes, players.them, players.us);
+        if (debug) logGameState(players, 'played cards', C.Cards[players.us.playedCard], C.Cards[players.them.playedCard]);
+
+        preRollCards(options, players.us, players.them, round);
+        preRollCards(options, players.them, players.us, round);
+        if (debug) logGameState(players, 'applied pre roll cards');
+        if (players.us.army === '' || players.them.army === '')
             break;
 
-        let attackerModifier = preRollModifier(ourArmy, theirArmy, options, options.us, options.them, round)
-        let defenderModifier = preRollModifier(theirArmy, ourArmy, options, options.them, options.us, round)
+        let ourCVB = preRollEffects(options, players.us, players.them, round)
+        let theirCVB = preRollEffects(options, players.them, players.us, round)
+        if (debug) logGameState(players, 'applied pre roll modifier', ourCVB, theirCVB);
 
-        let ourRoll = this['combat.roll'](ourArmy, options, options.us, options.them, round);
-        let theirRoll = roll(theirArmy, options, options.them, options.us, round)
+        let ourRoll = roll(options, players.us, players.them, round);
+        let theirRoll = roll(options, players.them, players.us, round)
+        if (debug) logGameState(players, 'rolled', ourRoll, theirRoll);
 
-        let ourCVB = clashAbilities(ourArmy, ourRoll, attackerModifier, options.us, options.them);
-        let theirCVB = clashAbilities(theirArmy, theirRoll, defenderModifier, options.them, options.us);
+        clashAbilities(ourRoll, ourCVB, options, players.us, players.them, round);
+        clashAbilities(theirRoll, theirCVB, options, players.them, players.us, round);
+        if (debug) logGameState(players, 'applied clash abilities', ourRoll, theirRoll, ourCVB, theirCVB);
 
-        postRollModifier(attackerCVB, attackerRoll, ourArmy, theirArmy, options, options.us, options.them, round)
-        postRollModifier(defenderCVB, defenderRoll, theirArmy, ourArmy, options, options.them, options.us, round)
+        postRollEffects(ourCVB, options, players.us, players.them, round)
+        postRollEffects(theirCVB, options, players.them, players.us, round)
+        if (debug) logGameState(players, 'applied post roll modifiers', ourCVB, theirCVB)
 
-        ourArmy = applyHits(ourArmy, theirCVB['hits'] - ourCVB['blocks'], options.us)
-        theirArmy = applyHits(theirArmy, ourCVB['hits'] - theirCVB['blocks'], options.them)
+        applyHits(players.us, theirCVB['hits'] - ourCVB['blocks'])
+        applyHits(players.them, ourCVB['hits'] - theirCVB['blocks'])
+        if (debug) logGameState(players, 'applied hits');
 
-        ourArmy = postCasualties(ourArmy, theirArmy, ourCVB, theirCVB, options, options.us, options.them)
-        theirArmy = postCasualties(theirArmy, ourArmy, theirCVB, ourCVB, options, options.them, options.us)
+        postCasualtiesEffects(ourCVB, theirCVB, options, players.us, players.them);
+        postCasualtiesEffects(theirCVB, ourCVB, options, players.them, players.us);
+        if (debug) logGameState(players, 'applied post casualties effects');
 
-        fightOver = ourArmy.length === 0 || theirArmy.length === 0 || options.eclipse;
+        fightOver = players.us.army.length === 0 || players.them.army.length === 0 || options.eclipse;
         round++;
-
-
     }
-    return ourArmy.length - theirArmy.length;
+    if (debug) logGameState(players, 'fight over');
+    return players.us.army.length - players.them.army.length;
 }
 
 function getArmies(armySize) {
     if (armySize === 1)
-        return ['s', 'sl', 'l', 'i', 'c', 'e'];
+        return ['s', 'l', 'i', 'c', 'e'];
     else if (armySize === 2)
-        return ['ss', 'ssl', 'il', 'cl', 'el', 'ii', 'ic', 'ie', 'cc', 'ce', 'ee'];
+        return ['ss', 'il', 'cl', 'el', 'ii', 'ic', 'ie', 'cc', 'ce', 'ee'];
     else if (armySize === 3)
-        return ['sss', 'sssl', 'iil', 'icl', 'iel', 'ccl', 'cel', 'eel', 'iii', 'iic', 'iie', 'icc', 'ice', 'iee', 'ccc', 'cce', 'cee', 'eee'];
+        return ['sss', 'iil', 'icl', 'iel', 'ccl', 'cel', 'eel', 'iii', 'iic', 'iie', 'icc', 'ice', 'iee', 'ccc', 'cce', 'cee', 'eee'];
     else if (armySize === 4)
-        return ['ssss', 'ssssl', 'iiii', 'iiic', 'iiie', 'iicc', 'iice', 'iiee', 'iccc', 'icce', 'icee', 'ieee', 'cccc', 'ccce', 'ccee',
+        return ['ssss', 'iiii', 'iiic', 'iiie', 'iicc', 'iice', 'iiee', 'iccc', 'icce', 'icee', 'ieee', 'cccc', 'ccce', 'ccee',
             'ceee', 'eeee', 'liii', 'liic', 'liie', 'licc', 'lice', 'liee', 'lccc', 'lcce', 'lcee', 'leee'];
 }
 
-export function getPwin(ourArmy, theirArmy, options, trials, startingRound) {
-    let survivors = []
-    for (let i = 0; i < trials; i++)
-        survivors.push(battle(ourArmy, theirArmy, options, startingRound))
+export function getPwin(options, players, trials, startingRound=0, debug) {
+    let totalWins = 0, totalSurvivors = 0;
+    for (let i = 0; i < trials; i++) {
+        let trialPlayers = cloneDeep(players);
+        const survivors = battle(options, trialPlayers, startingRound, debug && i === 1);
 
-    // calculate avg win %
-    let weWin = 0;
-    survivors.forEach(function(x) {if (options.us.attacking && x > 0 || x > 1) weWin++;})
-    let pWin = weWin / trials;
-
-    // avg survivors
-    let totalSurvivors = 0;
-    survivors.forEach(function(s) {totalSurvivors += s})
-    let avgSurvivors = totalSurvivors / trials;
-
-    return [pWin, avgSurvivors];
+        totalSurvivors += survivors;
+        if (players.us.attacking && survivors >= 1 || players.them.attacking && survivors >= 0)
+            totalWins++;
+    }
+    return [totalWins/trials, totalSurvivors/trials];
 }
 
-function findBestSubsets(ourArmy, theirArmy, options) {
-    options.us.subsets = {}
-    options.them.subsets = {}
-    for (let subsetSize = 1; subsetSize < Math.max(ourArmy.length, theirArmy.length); subsetSize++) {
-        const armies = getArmies(subsetSize);
-
+function findBestSubsets(options) {
+    let ourSubsets = {}, theirSubsets = {};
+    for (let subsetSize = 1; subsetSize < Math.max(options.us.army.length, options.them.army.length); subsetSize++) {
+        function filterArmies(thisPlayer, subsetSize) {
+            let filtered = thisPlayer.army.length > subsetSize && getArmies(subsetSize).filter(a => ['s','l','i','c','e'].every(t => a.count(t) <= thisPlayer.army.count(t)))
+            || [thisPlayer.army];
+            if (thisPlayer.saveLeader && ~thisPlayer.army.indexOf('l')) // if we opt to save the leader, filter out subsets without him
+                filtered = filtered.filter(s => ~s.indexOf('l'))
+            return filtered
+        }
         // find all subsets of each army
-        let ourSubsets = ourArmy.length > subsetSize && armies.filter(a => ['s','l','i','c','e'].every(t => a.count(t) <= ourArmy.count(t)))
-            || [ourArmy];
-        if (options.us.saveLeader && ~ourArmy.indexOf('l')) // if we opt to save the leader, filter out subsets without him
-            ourSubsets = ourSubsets.filter(s => ~s.indexOf('l'))
-        let theirSubsets = theirArmy.length > subsetSize && armies.filter(a => ['s','l','i','c','e'].every(t => a.count(t) <= theirArmy.count(t)))
-            || [theirArmy];
-        if (options.them.saveLeader && ~theirArmy.indexOf('l')) theirSubsets = theirSubsets.filter(s => ~s.indexOf('l'))
+        let ourTrialSubsets = filterArmies(options.us, subsetSize);
+        let theirTrialSubsets = filterArmies(options.them, subsetSize);
 
         // make each subset fight each other subset
         let ourWorst = {};
         let theirWorst = {};
-        ourSubsets.forEach(function(us) {
-            theirSubsets.forEach(function(them) {
-                [pWin, _] = getPwin(ourArmy, theirArmy, options, 1000, 2);
+        ourTrialSubsets.forEach(function(ourTrialSubset) {
+            theirTrialSubsets.forEach(function(theirTrialSubset) {
+                let trialPlayers = cloneDeep(options);
+                trialPlayers.us.army = ourTrialSubset;
+                trialPlayers.us.subsets = ourSubsets;
+                trialPlayers.them.army = theirTrialSubset;
+                trialPlayers.them.subsets = theirSubsets;
+                let pWin = getPwin(options, trialPlayers, 1000, 2)[0];
 
-                if (!(us in ourWorst) || ourWorst[us]['p'] > pWin)
-                    ourWorst[us] = {p: pWin, opponent: theirArmy};
-                if (!(them in theirWorst) || theirWorst[them]['p'] < pWin)
-                    theirWorst[them] = {p: pWin, opponent: ourArmy};
+                if (!(ourTrialSubset in ourWorst) || ourWorst[ourTrialSubset]['p'] > pWin)
+                    ourWorst[ourTrialSubset] = {p: pWin, opponent: theirTrialSubset};
+                if (!(theirTrialSubset in theirWorst) || theirWorst[theirTrialSubset]['p'] < pWin)
+                    theirWorst[theirTrialSubset] = {p: pWin, opponent: ourTrialSubset};
             });
         });
 
-        options.us.subsets[subsetSize] = ourWorst.entries().sort(function(a, b) {return (a[1].p < b[1].p)}).map(worst => worst[0]);
-        options.them.subsets[subsetSize] = theirWorst.entries().sort(function(a, b) {return a[1].p > b[1].p}).map(worst => worst[0]);
-
+        ourSubsets[subsetSize] = Object.entries(ourWorst).sort((a, b) => b[1].p - a[1].p).map(worst => worst[0]);
+        theirSubsets[subsetSize] = Object.entries(theirWorst).sort((a, b) => a[1].p - b[1].p).map(worst => worst[0]);
     }
+    return [ourSubsets, theirSubsets];
 }
 
-export function simulateCombat(ourArmy, theirArmy, options, trials) {
-    // first, find the best subsets of each army
-    findBestSubsets(ourArmy, theirArmy, options);
+export function simulateCombat(options, trials) {
+    options.us.usedArena = options.them.usedArena = false;
+    options.sea = ~options.us.army.indexOf('s') || ~options.them.army.indexOf('s');
+    if (options.sea)
+        options.fort = false;
+    [options.us, options.them].forEach(function(player) {
+        if (player.civ === C.BARBARIAN) {
+            for (let i = 0; i < player.wonders.length; i++)
+                player.wonders[i] = false;
+            for (let i = 0; i < player.advances.length; i++)
+                player.advances[i] = false;
+            player.cards = [];
+            ['food', 'wood', 'ore', 'gold', 'culture'].forEach(r => player.resources[r] = 0);
+        }
+    })
 
-    return getPwin(ourArmy, theirArmy, optoins, trials)
+    // first, find the best subsets of each army for each player
+    let [ourSubsets, theirSubsets] = findBestSubsets(options);
+
+    let players = {};     // players is mutable.  Options are not.  So clone players.
+    players.us = cloneDeep(options.us);
+    players.them = cloneDeep(options.them);
+    players.us.subsets = ourSubsets;
+    players.them.subsets = theirSubsets;
+    logGameState(players, 'found subsets', ourSubsets, theirSubsets);
+
+    // then make them fight
+    return getPwin(options, players, trials, 0, true).concat(players);
 
 }

@@ -1,0 +1,21 @@
+options
+    fort
+    sea
+    city
+    amphibious
+    eclipse
+
+playerOptions
+    civ: 0,
+    leader = 0,
+    saveLeader: true,
+    attacking: true,
+    hasCards: true,
+    cards: [5,3,6,5,5, -1],  //-1 means we don't know what it is
+    wonders: [false, false],
+    advances: [false, false, false, false, false],
+    army: 'lice',
+    resources: {food: 0, wood: 0, ore: 0, gold: 0, culture: 0,
+        need_food: false, need_wood: false, need_ore: false, need_culture: false
+        }
+
