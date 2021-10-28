@@ -56,7 +56,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
     }
 
     const addCard = function(e) {
-        options.cards.push(-1);
+        options.cards.push(C.UNKNOWNCARD);
         onOptionChange(options);
     };
 
@@ -166,7 +166,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                         <div key={i}>
                             <select name={i} value={card} onChange={onCardChange}>
 
-                                <option key={-1} value={-1}>Unknown</option>
+                                <option key={C.UNKNOWNCARD} value={C.UNKNOWNCARD}>Unknown</option>
 
                                 {C.Cards.map(function (card, i) {
                                     if (!~playableCardTypes.indexOf(i)) // highlight unplayable cards
@@ -183,7 +183,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
             </div>}
 
             {options.civ !== C.BARBARIAN && <div>Resources &nbsp;
-                {['food', 'wood', 'ore', 'gold', 'culture'].map(r => (
+                {['food', 'wood', 'ore', 'gold', 'culture', 'mood'].map(r => (
                     <label key={r}>
                         {r}
                         <input type="text" size="3" name={r} value={options.resources[r]} onChange={onChangeResource}/>&nbsp;&nbsp;

@@ -15,7 +15,7 @@ playerOptions
     wonders: [false, false],
     advances: [false, false, false, false, false],
     army: 'lice',
-    resources: {food: 0, wood: 0, ore: 0, gold: 0, culture: 0,
-        need_food: false, need_wood: false, need_ore: false, need_culture: false
+    resources: {food: 0, wood: 0, ore: 0, gold: 0, culture: 0, mood: 0,
+        need_food: false, need_wood: false, need_ore: false, need_culture: false, need_mood: false
         }
 

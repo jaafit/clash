@@ -26,7 +26,7 @@ export const App = () => {
             wonders: Array(C.Wonders.length).fill(false),
             advances: Array(C.Advances.length).fill(false), // tribal warfare is scalar
             army: 'lice',
-            resources: {food: 7, wood: 7, ore: 7, gold: 7, culture: 10,
+            resources: {food: 7, wood: 7, ore: 7, gold: 7, culture: 10, mood: 10,
                 need_food: false, need_wood: false, need_ore: false, need_culture: false
             }
         }
