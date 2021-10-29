@@ -48,12 +48,18 @@ function haveResource(player, amt, type) {
     return have >= amt
 }
 function spendResource(player, amt, type) {
-    if (!haveResource(player, amt, type))
-        return false;    
-    player[type] = Math.max(0, player[type] - amt)
-    amt -= player[type];
-    if (~['food', 'wood', 'ore'].indexOf(type))
-        player['gold'] -= amt;
+    amt = [].concat(amt);
+    type = [].concat(type)
+    let boli = amt.map((a,i) => ({amt:a, type:type[i]}))
+    if (boli.some(b => !haveResource(player, b.amt, b.type)))
+        return false;
+    boli.forEach(function(b){
+        let goldNeeded = Math.max(b.amt - player[b.type], 0);
+        player[b.type] = Math.max(player[b.type] - amt, 0);
+        if (~['food', 'wood', 'ore'].indexOf(type))
+            player.gold -= goldNeeded;
+    });
+
     return true;
 }
 
@@ -157,6 +163,9 @@ function playCard(playableCards, options, us, them, round) {
     if (leaderInArmy(options, us, C.XERXES) && us.army.length === 5)
         canPlayCard = false;
 
+    if (options.trojan && them.attacking && options.city && options.fort && us.civ !== C.BARBARIAN && spendResource(them, [1,1],['culture', 'wood']))
+        canPlayCard = false;
+
     if (canPlayCard)
         while (us.cards.length) {
             let c = us.cards.shift();
@@ -210,7 +219,7 @@ function preRollEffects(options, us, them, round) {
     if (us.attacking && them.wonders[C.GREATWALL] && round === 0)
         us.cvb.bonusCV -= 2;
 
-    if (us.advances[C.STEEL_WEAPONS]) {
+    if (us.advances[C.STEEL_WEAPONS] && !options.sea) {
         let needOre = !us.advances[C.METALLURGY] || them.advances[C.STEEL_WEAPONS]
         if (!needOre || spendResource(us, 1, 'ore')) {
             if (them.advances[C.STEEL_WEAPONS])
@@ -458,7 +467,7 @@ function postRollBlocks(options, us, them, round) {
             swap = true;
         else if (us.attacking && blockMatters &&
             ( ourCount === 0 // one last breath!
-            || hitsToLose === 1 && ourCount - theirCount <= 0 && ourCount >= 1)) // 3v3 better than 2v2))
+            || hitsToLose === 1 && ourCount <= theirCount && ourCount >= 1)) // 3v3 > 2v2 and 2v3 > 1v2
             swap = true;
         else if (!us.attacking && blockMatters &&
             (ourCount === 0 && theirCount > 0
@@ -474,13 +483,9 @@ function postRollBlocks(options, us, them, round) {
 
     // When removing casualties \/ \/ \/
 
-    if (us.advances[C.FIREWORKS] && round === 0 && them.cvb.hits > us.cvb.blocks) {
-        if (haveResource(us, 1, 'food') && haveResource(us, 1, 'ore')) {
+    if (us.advances[C.FIREWORKS] && round === 0 && them.cvb.hits > us.cvb.blocks)
+        if (spendResource(us, [1,1], ['food','ore']))
             us.cvb.blocks++;
-            spendResource(us, 1, 'food');
-            spendResource(us, 1, 'ore');
-        }
-    }
 
     if (them.cvb.hits > us.cvb.blocks && leaderInArmy(options, us, C.QIN) && spendResource(us, 2, 'culture'))
         us.cvb.blocks++;
@@ -625,7 +630,9 @@ export function getPwin(options, players, trials, startingRound=0, debug) {
         const survivors = battle(options, trialPlayers, startingRound, debug && i === 1);
 
         totalSurvivors += survivors;
-        if (players.us.attacking && survivors >= 1 || players.them.attacking && survivors >= 0)
+        if (players.us.attacking && survivors >= 1
+            || players.them.attacking && survivors >= 0
+            || options.sea && survivors >= 1)
             totalWins++;
     }
     return [totalWins/trials, totalSurvivors/trials];
@@ -675,7 +682,7 @@ export function simulateCombat(options, trials) {
     if (options.sea)
         options.fort = false;
     [options.us, options.them].forEach(function(player) {
-        if (player.civ === C.BARBARIAN) {
+        if (player.civ === C.BARBARIAN || player.civ === C.PIRATE) {
             for (let i = 0; i < player.wonders.length; i++)
                 player.wonders[i] = false;
             for (let i = 0; i < player.advances.length; i++)

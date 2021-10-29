@@ -12,6 +12,7 @@ export const App = () => {
         city: true,
         amphibious: false,
         eclipse: false,
+        trojan: false,
         us: {},
         them: {}
     };
@@ -44,11 +45,13 @@ export const App = () => {
 
     const handleOurOptionChange = function(player) {
         mutuallyExclude(player, state.them); // todo needs to use a function so that we use actual state
+        state.sea = ~player.army.indexOf('s');
         setState({...state});
     };
 
     const handleTheirOptionChange = function(player) {
         mutuallyExclude(player, state.us);
+        state.sea = ~player.army.indexOf('s');
         setState({...state});
     };
 
@@ -64,7 +67,6 @@ export const App = () => {
     const go = function() {
         const [pWin, avgStanding, players] = simulateCombat(state, 10000);
         setState({...state, pWin:pWin});
-        console.log(state);
     }
 
     const playableCardTypesYou = getPlayableCardTypes(state, state.us);
@@ -93,6 +95,9 @@ export const App = () => {
           <label>Eclipse
               <input name="eclipse" type="checkbox" checked={state.eclipse} onChange={handleChangeCheckbox}/>
           </label>
+          <label>Trojan
+              <input name="trojan" type="checkbox" checked={state.trojan} onChange={handleChangeCheckbox}/>
+          </label>
 
       </div>
 
@@ -102,7 +107,8 @@ export const App = () => {
 
         <button onClick={go}>Go</button>
 
-        {state.pWin && <p>Win probability: {Math.round(state.pWin*100)}%</p>}
+        {state.pWin && <p>Probability you {(!state.sea && !state.us.attacking) ? <span>do not lose:</span> : <span>win:</span>}
+        {Math.round(state.pWin*100)}%</p>}
 
     </div>
   );

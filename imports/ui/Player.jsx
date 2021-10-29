@@ -168,11 +168,9 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
 
                                 <option key={C.UNKNOWNCARD} value={C.UNKNOWNCARD}>Unknown</option>
 
-                                {C.Cards.map(function (card, i) {
-                                    if (!~playableCardTypes.indexOf(i)) // highlight unplayable cards
-                                        card.name = '-'+card.name+'-';
-                                    return (<option key={i} value={i}>{card.name}</option>);
-                                })}
+                                {C.Cards.map((card, i) =>
+                                    <option key={i} value={i}>{~playableCardTypes.indexOf(i) ? card.name : '-'+card.name+'-'}</option>)
+                                }
 
                             </select>
                             <button id={"delete"+i} key={"delete"+i} onClick={function(e){deleteCard(i); e.preventDefault();}}>-</button>
