@@ -124,10 +124,19 @@ export function getPlayableCardTypes(options, us) {
 
     return playable;
 }
-function dealCards(us, startingRound) {
+function dealCards(us, startingRound, playableCards) {
+    let dealtCards = UnseenCards.splice(0, us.cards.count(C.UNKNOWNCARD));
+    dealtCards.sort(function(a, b) { // playables first, then sorted by card strength
+        const powerA = us.attacking ? (C.Cards[a].offenseP || 0) : (C.Cards[a].defenseP || 0);
+        const powerB = us.attacking ? (C.Cards[b].offenseP || 0) : (C.Cards[b].defenseP || 0);
+        return (~playableCards.indexOf(b) ? 1000 : 0 + powerB)
+            - (~playableCards.indexOf(a) ? 1000 : 0 + powerA);
+    });
+
     for (let i = 0; i < us.cards.length; i++)
         if (us.cards[i] === C.UNKNOWNCARD)
-            us.cards[i] = UnseenCards.shift();
+            us.cards[i] = dealtCards.shift();
+
     us.cards = us.cards.slice(startingRound); //  skip cards if round starts later
 }
 
@@ -182,18 +191,18 @@ function preRollCards(playableCards, options, us, them, round) {
     if (us.playedCard === C.SCOUTS) {
         us.cards.push(them.playedCard);
         
-        if (leaderInArmy(options, them, C.CYRUS) && them.playedCard)
+        if (leaderInArmy(options, them, C.CYRUS) && them.playedCard >= 0)
             them.cvb.bonusCV += 2;
-        them.playedCard = undefined;
+        them.playedCard = C.CANCELLEDCARD;
     }
 
     if (us.playedCard === C.MARTYR || them.playedCard === C.MARTYR)
         applyHits(us, 1);
 
     if (us.playedCard === C.MARTYR) {
-        if (leaderInArmy(options, them, C.CYRUS) && them.playedCard)
+        if (leaderInArmy(options, them, C.CYRUS) && them.playedCard >= 0)
             them.cvb.bonusCV += 2;
-        them.playedCard = undefined;
+        them.playedCard = C.CANCELLEDCARD;
     }
 
     if (us.playedCard === C.ARCHERS && !options.sea && randInt(1,3) === 3)
@@ -202,7 +211,7 @@ function preRollCards(playableCards, options, us, them, round) {
     // did CYRUS play an unplayable card?
     if (leaderInArmy(options, us, C.CYRUS) && !~playableCards.indexOf(us.playedCard)) {
         us.cvb.bonusCV += 2;
-        us.playedCard = undefined; // no future code needs to steal our card, so null it now
+        us.playedCard = C.CANCELLEDCARD; // no future code needs to steal our card, so null it now
     }
 
 
@@ -315,10 +324,10 @@ function preRollEffects(options, us, them, round) {
     if (us.akbarPaid)
         us.cvb.bonusCV += us.army.count('e');
     
-    if (leaderInArmy(options, us, C.MAHARAJA) && !this.playedCard === undefined)
+    if (leaderInArmy(options, us, C.MAHARAJA) && us.playedCard === undefined)
         us.cvb.bonusCV += 2;
     
-    if (us.leader === C.JIMMU && options.city && options.fort && !us.attacking && this.abilityValue && !us.leaderDied)
+    if (us.leader === C.JIMMU && options.city && options.fort && !us.attacking && us.abilityValue && !us.leaderDied)
         us.cvb.bonusCV += 2
     
     if (us.gotobaPaid)
@@ -555,8 +564,8 @@ export function battle (options, players, startingRound=0, debug=false) {
     let theirPlayableCardTypes = getPlayableCardTypes(options, players.them);
     UnseenCards = getAllCards(players.us.cards.concat(players.them.cards));
     UnseenCards = shuffle(UnseenCards);
-    dealCards(players.us, startingRound);
-    dealCards(players.them, startingRound);
+    dealCards(players.us, startingRound, ourPlayableCardTypes);
+    dealCards(players.them, startingRound, theirPlayableCardTypes);
 
     while (!fightOver()) {
         players.us.cvb = {cv:0, bonusCV:0, blocks:0, hits:0};
@@ -662,7 +671,7 @@ function findBestSubsets(options) {
                 trialPlayers.us.subsets = ourSubsets;
                 trialPlayers.them.army = theirTrialSubset;
                 trialPlayers.them.subsets = theirSubsets;
-                let pWin = getPwin(options, trialPlayers, 1000, 2)[0];
+                let pWin = getPwin(options, trialPlayers, 1000, 1)[0];
 
                 if (!(ourTrialSubset in ourWorst) || ourWorst[ourTrialSubset]['p'] > pWin)
                     ourWorst[ourTrialSubset] = {p: pWin, opponent: theirTrialSubset};
