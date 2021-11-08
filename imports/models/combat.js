@@ -238,7 +238,7 @@ function preRollEffects(options, us, them, round) {
         }
     }
 
-    if (us.advances[C.FANATICISM] && round === 0)
+    if (us.advances[C.FANATICISM] && options.temple && round === 0)
         us.cvb.bonusCV += 2;
 
     if (us.advances[C.IMMORTALS] && haveResource(us, 1, 'culture')) {
@@ -437,8 +437,8 @@ function postRollBonus(options, us, them, round) {
     if (round === 0 && leaderInArmy(options, them, C.HANNIBAL))
         bonusCap = 2;
 
-    if (!options.sea && us.wonders[C.GREATARENA] && us.cvb['bonusCV'] < bonusCap
-        && !us.usedArena && (us.cvb['cv'] + us.cvb['bonusCV']) % 5 === 4 && spendResource(us, 1, 'culture')) {
+    if (!options.sea && us.wonders[C.GREATARENA] && (bonusCap === undefined || us.cvb.bonusCV < bonusCap)
+        && !us.usedArena && (us.cvb.cv + us.cvb.bonusCV) % 5 === 4 && spendResource(us, 1, 'culture')) {
         us.usedArena = true;
         us.cvb.bonusCV += 1;
     }

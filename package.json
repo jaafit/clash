@@ -1,5 +1,5 @@
 {
-  "name": "simple-todos-react",
+  "name": "clash-of-cultures",
   "private": true,
   "scripts": {
     "start": "meteor run",
@@ -8,13 +8,17 @@
     "visualize": "meteor --production --extra-packages bundle-visualizer"
   },
   "dependencies": {
-    "@babel/runtime": "^7.6.0",
+    "@babel/core": "^7.16.0",
+    "@babel/runtime": "^7.16.0",
+    "@emotion/react": "^11.5.0",
+    "@emotion/styled": "^11.3.0",
+    "@mui/material": "^5.0.6",
     "bcrypt": "^3.0.8",
-    "classnames": "^2.2.6",
+    "classnames": "^2.3.1",
     "lodash": "^4.17.21",
-    "meteor-node-stubs": "^1.0.0",
-    "react": "^16.13.0",
-    "react-dom": "^16.13.0"
+    "meteor-node-stubs": "^1.1.0",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
   },
   "meteor": {
     "mainModule": {
@@ -24,6 +28,6 @@
     "testModule": "tests/main.js"
   },
   "devDependencies": {
-    "chai": "^4.2.0"
+    "chai": "^4.3.4"
   }
 }
