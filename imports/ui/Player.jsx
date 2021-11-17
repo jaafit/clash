@@ -2,6 +2,8 @@ import React from 'react';
 import * as C from '../models/components';
 import { Button, ButtonGroup, Card, Select, Switch, MenuItem, Slider, CardContent, Grid, Radio, Checkbox, FormControlLabel, Stack} from '@mui/material';
 import Collapse from '@mui/material/Collapse';
+import Paper from '@mui/material/Paper';
+
 
 
 export const Player = ({playerName, options, onOptionChange, playableCardTypes}) => {
@@ -129,11 +131,13 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
     const sevenEach = resources.every(r => Number(options.resources[r]) === 7);
 
     return (
-        <Grid container item xs={12} lg={6}>
+        <Paper sx={{bgcolor:'#000000'}}>
             {/* UNITS */}
-            <Grid container item className="card-container">
+            <Grid container item spacing={1} className="card-container">
                 <Grid item xs={2}>
-                    {playerName} {~options.army.indexOf('s') && 'Navy' || 'Army'}
+                    <Paper>
+                        <p>{playerName} {~options.army.indexOf('s') && 'Navy' || 'Army'}</p>
+                    </Paper>
                 </Grid>
                 <Grid item xs={7}>
                     <ButtonGroup>
@@ -169,7 +173,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
             </Grid>
 
             {/* CIVILIZATIONS and LEADERS */}
-            <Grid container item className="card-container">
+            <Grid container item spacing={1} className="card-container">
                 <Grid item xs={3}>
                     <Select name={'civ'} value={options.civ} onChange={onCivChange}>
                         { C.Civs.map( (civ, i) => <MenuItem
@@ -180,14 +184,14 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                 </Grid>
                     {(options.civ !== C.NOCIV && options.civ !== C.BARBARIAN) &&
                     leaders.map(leader =>
-                        <Grid item xs={3} key={leader.id}>
+                        <Grid item xs={3} key={leader.id}><Paper>
                             <FormControlLabel className="leader-radio"
                                 control={<Radio
                                             name={playerName+"leader"}
                                             checked={leader.id === options.leader}
                                             onChange={fOnLeaderChange(leader.id)}/>}
                                 label={leader.name}/>
-                        </Grid>
+                        </Paper></Grid>
                     )}
             </Grid>
 
@@ -219,10 +223,20 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                 {/* ADVANCES, WONDERS, GREAT PEOPLE */}
                 <Grid item xs={6}>
                     {options.civ !== C.BARBARIAN && options.civ !== C.PIRATE &&
-                    <Grid container>
+                    <Grid container spacing={1}>
+                        <Grid item sm={6} xs={12}>
+                            <FormControlLabel
+                                control={<Checkbox
+                                    type="checkbox"
+                                    name={'useSteelWeapons'}
+                                    checked={ Boolean(options.useSteelWeapons) }
+                                    disabled={ Boolean(!options.advances[C.STEEL_WEAPONS]) }
+                                    onChange = {onCheckboxChange}/>}
+                                label={'Use Steel Wep'}/>
+                        </Grid>
 
                     {Object.keys(advances).map((a) =>
-                        <Grid item key={a} sm={6} xs={12}>
+                        <Grid item key={a} sm={6} xs={12}><Paper className="player-option">
                             <FormControlLabel
                                 control={<Checkbox
                                             type="checkbox"
@@ -242,15 +256,17 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                                     </Grid>
                                 </Grid>
                             }
-                        </Grid>)}
+                        </Paper></Grid>)}
                         <Grid item sm={6} xs={12}>
                             <FormControlLabel
+                                className={'player-option event'}
                                 control={<Checkbox type="checkbox" name="greatWarlord" checked={Boolean(options.greatWarlord)} onChange={onCheckboxChange}/>}
                                 label="Great Warlord"/>
                         </Grid>
                         {C.Wonders.map((w, i) => (
                             <Grid item key={w} sm={6} xs={12}>
                                 <FormControlLabel
+                                    className={'player-option wonder'}
                                     control={<Checkbox type="checkbox" name={String(i)} checked={Boolean(options.wonders[i])} onChange={onWonderChange}/>}
                                     label={w}/>
                             </Grid>))}
@@ -308,6 +324,6 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                 </Grid>}
 
 
-        </Grid>
+        </Paper>
     );
 }

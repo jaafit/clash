@@ -77,6 +77,9 @@ let UnseenCards = [];
 function leaderInArmy(options, us, leader) {
     return us.leader === leader && !options.sea && ~us.army.indexOf('l');
 }
+function leaderInNavy(options, us, leader) {
+    return us.leader === leader && options.sea && ~us.army.indexOf('l');
+}
 
 // you tell ourArmy which cards you're playing in which order
 // we'll work out which cards your opponents might have and randomly play for theirArmy
@@ -230,7 +233,7 @@ function preRollEffects(options, us, them, round) {
 
     if (us.advances[C.STEEL_WEAPONS] && !options.sea) {
         let needOre = !us.advances[C.METALLURGY] || them.advances[C.STEEL_WEAPONS]
-        if (!needOre || spendResource(us, 1, 'ore')) {
+        if (!needOre || us.useSteelWeapons && spendResource(us, 1, 'ore')) {
             if (them.advances[C.STEEL_WEAPONS])
                 us.cvb.bonusCV++;
             else
@@ -291,7 +294,7 @@ function preRollEffects(options, us, them, round) {
     if (leaderInArmy(options, us, C.NABOPOLASSAR) && us.abilityValue)
         us.cvb.bonusCV += 2;
 
-    if (us.leader === C.HANNO && options.sea)
+    if (leaderInNavy(options, us, C.HANNO))
         us.cvb.bonusCV += 2;
 
     if (leaderInArmy(options, us, C.DIDO) && !us.attacking && options.city)
@@ -305,10 +308,11 @@ function preRollEffects(options, us, them, round) {
 
     if (leaderInArmy(options, us, C.RAMSES) && options.city && us.attacking && us.abilityValue)
         us.cvb.bonusCV += 2;
-    if (us.leader === C.RAMSES && options.sea && them.civ === C.PIRATE)
+
+    if (leaderInNavy(options, us, C.RAMSES) && them.civ === C.PIRATE)
         us.cvb.bonusCV += 2;
 
-    if (us.leader === C.PERICLES && options.sea)
+    if (leaderInNavy(options, us, C.PERICLES))
         us.cvb.bonusCV += 2;
 
     if (leaderInArmy(options, us, C.ALEXANDER))
@@ -632,19 +636,18 @@ function getArmies(armySize) {
             'ceee', 'eeee', 'liii', 'liic', 'liie', 'licc', 'lice', 'liee', 'lccc', 'lcce', 'lcee', 'leee'];
 }
 
-export function getPwin(options, players, trials, startingRound=0, debug) {
-    let totalWins = 0, totalSurvivors = 0;
+export function getPvictory(options, players, trials, startingRound=0, debug) {
+    let totalVictories = 0, totalSurvivors = 0;
     for (let i = 0; i < trials; i++) {
         let trialPlayers = cloneDeep(players);
         const survivors = battle(options, trialPlayers, startingRound, debug && i === 1);
 
         totalSurvivors += survivors;
-        if (players.us.attacking && survivors >= 1
-            || players.them.attacking && survivors >= 0
-            || options.sea && survivors >= 1)
-            totalWins++;
+        const target = options.city && players.them.attacking && !options.sea ? 0 : 1;
+        if (survivors >= target)
+            totalVictories++;
     }
-    return [totalWins/trials, totalSurvivors/trials];
+    return [totalVictories/trials, totalSurvivors/trials];
 }
 
 function findBestSubsets(options) {
@@ -671,7 +674,7 @@ function findBestSubsets(options) {
                 trialPlayers.us.subsets = ourSubsets;
                 trialPlayers.them.army = theirTrialSubset;
                 trialPlayers.them.subsets = theirSubsets;
-                let pWin = getPwin(options, trialPlayers, 1000, 1)[0];
+                let pWin = getPvictory(options, trialPlayers, 1000, 1)[0];
 
                 if (!(ourTrialSubset in ourWorst) || ourWorst[ourTrialSubset]['p'] > pWin)
                     ourWorst[ourTrialSubset] = {p: pWin, opponent: theirTrialSubset};
@@ -688,8 +691,12 @@ function findBestSubsets(options) {
 
 export function simulateCombat(options, trials) {
     options.sea = ~options.us.army.indexOf('s') && ~options.them.army.indexOf('s');
-    if (options.sea)
+    if (options.sea) {
+        options.city = false;
         options.fort = false;
+        options.temple = false;
+    }
+
     [options.us, options.them].forEach(function(player) {
         if (player.civ === C.BARBARIAN || player.civ === C.PIRATE) {
             for (let i = 0; i < player.wonders.length; i++)
@@ -700,9 +707,7 @@ export function simulateCombat(options, trials) {
             player.cards = [];
             ['food', 'wood', 'ore', 'gold', 'culture', 'mood'].forEach(r => player.resources[r] = 0);
         }
-        if (!options.sea && !~player.army.indexOf('l'))
-            player.leader = C.NOLEADER;
-        if (options.sea && player.leader && C.Leaders[player.leader].naval === false)
+        if (options.sea && C.Leaders[player.leader].naval === false)
             player.leader = C.NOLEADER;
     })
 
@@ -717,6 +722,6 @@ export function simulateCombat(options, trials) {
     logGameState(players, 'found subsets', ourSubsets, theirSubsets);
 
     // then make them fight
-    return getPwin(options, players, trials, 0, true).concat(players);
+    return getPvictory(options, players, trials, 0, true).concat(players);
 
 }

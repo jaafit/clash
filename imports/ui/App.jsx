@@ -4,7 +4,9 @@ import * as C from '../models/components'
 import {simulateCombat, getPlayableCardTypes} from '../models/combat'
 import { Grid, FormControlLabel, Switch, Button } from '@mui/material';
 import {ThemeProvider, createTheme} from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 import Container from '@mui/material/Container';
+import Paper from '@mui/material/Paper';
 
 export const App = () => {
     const initialState = {
@@ -28,6 +30,7 @@ export const App = () => {
             cards: [],
             wonders: Array(C.Wonders.length).fill(false),
             advances: Array(C.Advances.length).fill(false), // tribal warfare is scalar
+            useSteelWeapons: true,
             greatWarlord: false, // todo implement
             army: '',
             resources: {food: 7, wood: 7, ore: 7, gold: 7, culture: 7, mood: 7,
@@ -73,13 +76,14 @@ export const App = () => {
     }
     const go = function() {
         const [pWin, avgStanding, players] = simulateCombat(state, 10000);
-        setState({...state, pWin:pWin});
+        setState({...state, pWin:pWin, avgStanding:avgStanding});
     }
 
     const playableCardTypesYou = getPlayableCardTypes(state, state.us);
     const playableCardTypesThem = getPlayableCardTypes(state, state.them);
 
     const theme = createTheme({
+        palette: {mode: 'dark'},
         typography: {fontSize: 10}
     });
     //theme.typography[theme.breakpoints.up('sm')] = {fontSize:12};
@@ -87,30 +91,37 @@ export const App = () => {
     //theme.typography[theme.breakpoints.up('lg')] = {fontSize:12};
 
   return (
-    <ThemeProvider theme={theme}>
-        <Container fixed>
-          <h2>Clash of Cultures Combat Simulator</h2>
+        <ThemeProvider theme={theme}>
+            <CssBaseline>
+            <Container fixed spacing={2}>
+              <h2>Clash of Cultures Combat Simulator</h2>
 
-            <Grid container>
-                <Player playerName={'Your'} options={state.us} onOptionChange={handleOurOptionChange} playableCardTypes={playableCardTypesYou}/>
-                <Player playerName={'Their'} options={state.them} onOptionChange={handleTheirOptionChange} playableCardTypes={playableCardTypesThem}/>
-            </Grid>
+                <Grid container spacing={3}>
+                    <Grid container item xs={12} lg={6}>
+                        <Player playerName={'Your'} options={state.us} onOptionChange={handleOurOptionChange} playableCardTypes={playableCardTypesYou}/>
+                    </Grid>
+                    <Grid container item xs={12} lg={6}>
+                        <Player playerName={'Their'} options={state.them} onOptionChange={handleTheirOptionChange} playableCardTypes={playableCardTypesThem}/>
+                    </Grid>
+                </Grid>
 
-            <Grid container>
-                {['City', 'Fort', 'Temple', 'Amphibious', 'Eclipse', 'Trojan'].map(x =>
-                    <Grid item xs={3} sm={2} lg={1} key={x}>
-                        <FormControlLabel
-                            control={<Switch name={x.toLowerCase()} checked={state[x.toLowerCase()]} onChange={handleChangeCheckbox}/>}
-                            label={x}/>
-                    </Grid>)}
-            </Grid>
+                <Grid container spacing={1}>
+                    {['City', 'Fort', 'Temple', 'Amphibious', 'Eclipse', 'Trojan'].map(x =>
+                        <Grid item xs={4} md={2} key={x}><Paper>
+                            <FormControlLabel
+                                control={<Switch name={x.toLowerCase()} checked={state[x.toLowerCase()]} onChange={handleChangeCheckbox}/>}
+                                label={x}/>
+                        </Paper></Grid>)}
+                </Grid>
 
-            <button onClick={go}>Go</button>
+                <button onClick={go}>Go</button>
 
-            {state.pWin && <p>Probability you {(!state.sea && !state.us.attacking) ? <span>do not lose:</span> : <span>win:</span>}
-            {Math.round(state.pWin*100)}%</p>}
+                {state.pWin && <p>Probability you {(!state.sea && state.city && !state.us.attacking) ? <span>do not lose:</span> : <span>win:</span>}
+                    {Math.round(state.pWin*100)}%</p>}
+                {state.avgStanding && <p>Avg standing {state.avgStanding}</p>}
 
-        </Container>
-    </ThemeProvider>
+            </Container>
+            </CssBaseline>
+        </ThemeProvider>
   );
 };

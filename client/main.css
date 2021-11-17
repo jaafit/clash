@@ -7,3 +7,16 @@ body {
 .leader-radio {
     word-break: break-all;
 }
+.player-option {
+    padding: 5px;
+}
+.player {
+    background-color: #222222;
+}
+.advance-option {
+    background-color: #00005f;
+}
+.advance {
+    background-color: beige;
+    color: black;
+}
