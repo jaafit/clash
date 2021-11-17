@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {Player} from './Player';
+import {Results} from './Results';
 import * as C from '../models/components'
 import {simulateCombat, getPlayableCardTypes} from '../models/combat'
 import { Grid, FormControlLabel, Switch, Button } from '@mui/material';
@@ -7,9 +8,11 @@ import {ThemeProvider, createTheme} from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
+import ShieldIcon from '@mui/icons-material/Shield';
+import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 
 export const App = () => {
-    const initialState = {
+    const initialOptions = {
         fort: false,
         temple: false,
         sea: false,
@@ -21,7 +24,7 @@ export const App = () => {
         them: {}
     };
     ['us', 'them'].forEach(function(who)  {
-        initialState[who] = {
+        initialOptions[who] = {
             civ: C.NOCIV,
             leader: C.NOLEADER,
             abilityValue: undefined,
@@ -39,8 +42,8 @@ export const App = () => {
         }
     });
 
-    const [state, setState] =  useState(initialState)
-
+    const [options, setOptions] =  useState(initialOptions)
+    const [results, setResults] = useState({})
 
     const mutuallyExclude = function(thisPlayer, thatPlayer) {
         thatPlayer.attacking = !thisPlayer.attacking;
@@ -50,37 +53,45 @@ export const App = () => {
     }
 
     const handleOurOptionChange = function(player) {
-        mutuallyExclude(player, state.them); // todo needs to use a function so that we use actual state
-        state.sea = ~player.army.indexOf('s');
-        setState({...state});
+        mutuallyExclude(player, options.them); // todo needs to use a function so that we use actual state
+        options.sea = ~player.army.indexOf('s');
+        setOptions({...options});
     };
 
     const handleTheirOptionChange = function(player) {
-        mutuallyExclude(player, state.us);
-        state.sea = ~player.army.indexOf('s');
-        setState({...state});
+        mutuallyExclude(player, options.us);
+        options.sea = ~player.army.indexOf('s');
+        setOptions({...options});
     };
 
     const handleChangeOption = function(e) {
         let { value, name } = e.target;
-        setState({...state, [name]: value});
+        setOptions({...options, [name]: value});
     }
 
     const handleChangeCheckbox = function(e) {
         let {value, name} = e.target;
-        if (state.city && name === 'city')
-            state.fort = state.temple = false;
-        if (!state.city && ['fort', 'temple'].some(x => name === x && !state[name] ))
-            state.city = true;
-        setState({...state, [name]: !state[name]})
-    }
-    const go = function() {
-        const [pWin, avgStanding, players] = simulateCombat(state, 10000);
-        setState({...state, pWin:pWin, avgStanding:avgStanding});
+        if (options.city && name === 'city')
+            options.fort = options.temple = false;
+        if (!options.city && ['fort', 'temple'].some(x => name === x && !options[name] ))
+            options.city = true;
+        setOptions({...options, [name]: !options[name]})
     }
 
-    const playableCardTypesYou = getPlayableCardTypes(state, state.us);
-    const playableCardTypesThem = getPlayableCardTypes(state, state.them);
+    const onReset = function() {
+        setOptions(initialOptions);
+        setResults({});
+    }
+
+    const go = function() {
+        const results = simulateCombat(options, 20000);
+        setOptions(options);
+        setResults(results)
+        setTimeout(function() {window.scrollTo(0,document.body.scrollHeight)}, 100); // wait for update
+    }
+
+    const playableCardTypesYou = getPlayableCardTypes(options, options.us);
+    const playableCardTypesThem = getPlayableCardTypes(options, options.them);
 
     const theme = createTheme({
         palette: {mode: 'dark'},
@@ -93,33 +104,36 @@ export const App = () => {
   return (
         <ThemeProvider theme={theme}>
             <CssBaseline>
-            <Container fixed spacing={2}>
-              <h2>Clash of Cultures Combat Simulator</h2>
+            <Container fixed>
+                <Grid container spacing={2}>
+                    <Grid item xs={9}><h3>Clash of Cultures Combat Simulator</h3></Grid>
+                    <Grid item xs={3}><Button endIcon={<RotateLeftIcon/>} onClick={onReset}>Reset</Button></Grid>
 
-                <Grid container spacing={3}>
-                    <Grid container item xs={12} lg={6}>
-                        <Player playerName={'Your'} options={state.us} onOptionChange={handleOurOptionChange} playableCardTypes={playableCardTypesYou}/>
+                    <Grid container item xs={12} spacing={3}>
+                        <Grid container item xs={12} lg={6}>
+                            <Player playerName={'Your'} options={options.us} onOptionChange={handleOurOptionChange} playableCardTypes={playableCardTypesYou}/>
+                        </Grid>
+                        <Grid container item xs={12} lg={6}>
+                            <Player playerName={'Their'} options={options.them} onOptionChange={handleTheirOptionChange} playableCardTypes={playableCardTypesThem}/>
+                        </Grid>
                     </Grid>
-                    <Grid container item xs={12} lg={6}>
-                        <Player playerName={'Their'} options={state.them} onOptionChange={handleTheirOptionChange} playableCardTypes={playableCardTypesThem}/>
+
+                    <Grid container item xs={12} spacing={1}>
+                        {['City', 'Fort', 'Temple', 'Amphibious', 'Eclipse', 'Trojan'].map(x =>
+                            <Grid item xs={4} md={2} key={x}><Paper sx={{p:1}}>
+                                <FormControlLabel
+                                    control={<Switch name={x.toLowerCase()} checked={options[x.toLowerCase()]} onChange={handleChangeCheckbox}/>}
+                                    label={x}/>
+                            </Paper></Grid>)}
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <Button variant="contained" size="large" onClick={go} endIcon={<ShieldIcon/>}>Go</Button>
+                    </Grid>
+                    <Grid item xs={12}>
+                        {results.pVictory !== undefined && <Results options={options} results={results} />}
                     </Grid>
                 </Grid>
-
-                <Grid container spacing={1}>
-                    {['City', 'Fort', 'Temple', 'Amphibious', 'Eclipse', 'Trojan'].map(x =>
-                        <Grid item xs={4} md={2} key={x}><Paper>
-                            <FormControlLabel
-                                control={<Switch name={x.toLowerCase()} checked={state[x.toLowerCase()]} onChange={handleChangeCheckbox}/>}
-                                label={x}/>
-                        </Paper></Grid>)}
-                </Grid>
-
-                <button onClick={go}>Go</button>
-
-                {state.pWin && <p>Probability you {(!state.sea && state.city && !state.us.attacking) ? <span>do not lose:</span> : <span>win:</span>}
-                    {Math.round(state.pWin*100)}%</p>}
-                {state.avgStanding && <p>Avg standing {state.avgStanding}</p>}
-
             </Container>
             </CssBaseline>
         </ThemeProvider>

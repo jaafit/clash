@@ -3,7 +3,9 @@ import * as C from '../models/components';
 import { Button, ButtonGroup, Card, Select, Switch, MenuItem, Slider, CardContent, Grid, Radio, Checkbox, FormControlLabel, Stack} from '@mui/material';
 import Collapse from '@mui/material/Collapse';
 import Paper from '@mui/material/Paper';
-
+import Tooltip from '@mui/material/Tooltip';
+import IconButton from '@mui/material/IconButton';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 
 export const Player = ({playerName, options, onOptionChange, playableCardTypes}) => {
@@ -115,6 +117,10 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
         onOptionChange(options);
     };
 
+    const unitType = function(t) {
+        return t === 's' && 'Ship' || t === 'l' && 'leader' || t === 'i' && 'Infantry' || t === 'c' && 'Cavalry' || t === 'e' && 'Elephant';
+    }
+
     let advances = {};
     C.Advances.slice(0, C.nBasicAdvances).forEach(function(a, i){
         advances[i] = a;
@@ -131,9 +137,9 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
     const sevenEach = resources.every(r => Number(options.resources[r]) === 7);
 
     return (
-        <Paper sx={{bgcolor:'#000000'}}>
+        <Paper sx={{bgcolor:'#000000', p:2}}><Grid container spacing={2}>
             {/* UNITS */}
-            <Grid container item spacing={1} className="card-container">
+            <Grid container item spacing={2} className="card-container">
                 <Grid item xs={2}>
                     <Paper>
                         <p>{playerName} {~options.army.indexOf('s') && 'Navy' || 'Army'}</p>
@@ -142,7 +148,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                 <Grid item xs={7}>
                     <ButtonGroup>
                         {options.army.split('').map((t,i) => (
-                            <Button key={i} onClick={fRemoveUnit(t)}>{t.toUpperCase()}</Button>
+                            <Tooltip key={i} title={'Delete'}><Button onClick={fRemoveUnit(t)}>{t.toUpperCase()}</Button></Tooltip>
                         ))}
                     </ButtonGroup>
                 </Grid>
@@ -154,21 +160,23 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
             </Grid>
 
             {/* ADD UNITS */}
-            <Grid container item className="card-container">
+            <Grid container item spacing={2} className="card-container">
                 <Grid item xs={2}/>
                 <Grid item xs={7}>
                     <ButtonGroup>
-                        {'slice'.split('').map(t => <Button key={t} variant="contained" onClick={fAddUnit(t)}>{t.toUpperCase()}</Button>)}
+                        {'lecis'.split('').map(t =>
+                            <Tooltip key={t} title={unitType(t)}><Button variant="contained" onClick={fAddUnit(t)}>{t.toUpperCase()}</Button></Tooltip>)}
                     </ButtonGroup>
                 </Grid>
                 {options.civ !== C.BARBARIAN && !!~options.army.indexOf('l') && !~options.army.indexOf('s') &&
                 <Grid item xs={3}>
-                    <FormControlLabel
-                        control={<Switch
+                    <Tooltip title="Even if it lowers your odds of victory"><FormControlLabel
+                        control={
+                            <Switch
                                     name="saveLeader"
                                     checked={Boolean(options.saveLeader)}
                                     onChange={onCheckboxChange}/>}
-                        label="Save Leader"/>
+                        label="Save Leader"/></Tooltip>
                 </Grid>}
             </Grid>
 
@@ -202,7 +210,9 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                     <div className="float-end">{C.Leaders[options.leader].ability}</div>
                 </Grid>
                 {C.Leaders[options.leader].type === 'Boolean' &&
-                    <Grid item xs={9}><Switch name="abilityValue" checked={options.abilityValue || false} onChange={onCheckboxChange}/></Grid>}
+                    <Grid item xs={9}><Tooltip title={'Does this ability apply here?'}>
+                        <Switch name="abilityValue" checked={options.abilityValue || false} onChange={onCheckboxChange}/></Tooltip>
+                    </Grid>}
                 {C.Leaders[options.leader].type === 'Integer' &&
                     <>
                     <Grid item xs={6}>
@@ -281,14 +291,16 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                             <Stack direction="row" key={i}>
                                 <Select name={String(i)} value={card} onChange={onCardChange}>
 
-                                    <MenuItem key={C.UNKNOWNCARD} value={C.UNKNOWNCARD}>Unknown</MenuItem>
+                                    <MenuItem key={C.UNKNOWNCARD} value={C.UNKNOWNCARD}>Random</MenuItem>
 
                                     {C.Cards.map((card, i) =>
                                         <MenuItem key={i} value={String(i)}>{~playableCardTypes.indexOf(i) ? card.name : '-'+card.name+'-'}</MenuItem>)
                                     }
 
                                 </Select>
-                                <Button variant="outlined" onClick={function(e){deleteCard(i); e.preventDefault();}}>-</Button>
+                                <IconButton onClick={function(e){deleteCard(i); e.preventDefault();}}>
+                                    <DeleteIcon/>
+                                </IconButton>
                             </Stack>
                         )}
                         <div><Button onClick={addCard}>Add Card</Button></div>
@@ -322,8 +334,6 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                         </Grid>
                     </Collapse>
                 </Grid>}
-
-
-        </Paper>
+        </Grid></Paper>
     );
 }

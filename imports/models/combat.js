@@ -166,7 +166,7 @@ function playCard(playableCards, options, us, them, round) {
     us.playedCard = undefined;
     let canPlayCard = true;
 
-    if (them.advances[C.SPARTANS] && us.army.length > them.army.length)
+    if (them.advances[C.SPARTANS] && us.attacking && us.army.length > them.army.length)
         canPlayCard = false;
 
     if (leaderInArmy(options, them, C.BLEDA) && options.city && them.attacking && round === 0)
@@ -184,6 +184,7 @@ function playCard(playableCards, options, us, them, round) {
             
             if (~playableCards.indexOf(c) || leaderInArmy(options, us, C.CYRUS)) {
                 us.playedCard = c;
+                us.nPlayedCards++;
                 break;
             }             
         }
@@ -519,6 +520,8 @@ function applyHits (player, hits, bestSubset=true) {
 
     let alive = player.army.length - hits;
     if (alive <= 0) {
+        if (~player.army.indexOf('l'))
+            player.leaderDied = true;
         player.army = '';
         return
     }
@@ -621,7 +624,7 @@ export function battle (options, players, startingRound=0, debug=false) {
         round++;
     }
     if (debug) logGameState(players, 'fight over');
-    return players.us.army.length - players.them.army.length;
+    return [players.us.army.length - players.them.army.length, round]
 }
 
 function getArmies(armySize) {
@@ -638,16 +641,63 @@ function getArmies(armySize) {
 
 export function getPvictory(options, players, trials, startingRound=0, debug) {
     let totalVictories = 0, totalSurvivors = 0;
+    let leftOvers = {};
+    let theirLeaderDied = 0, ourLeaderDied = 0;
+    let ourCardsPlayed = 0, theirCardsPlayed = 0;
+    let totalRounds = 0;
+
     for (let i = 0; i < trials; i++) {
         let trialPlayers = cloneDeep(players);
-        const survivors = battle(options, trialPlayers, startingRound, debug && i === 1);
+        const [survivors, rounds] = battle(options, trialPlayers, startingRound, debug && i === 1);
+
+        totalRounds += rounds;
+
+        if (trialPlayers.us.leaderDied)
+            ourLeaderDied++;
+        if (trialPlayers.them.leaderDied)
+            theirLeaderDied++;
+
+        ourCardsPlayed += players.us.nCardsPlayed;
+        theirCardsPlayed += players.them.nCardsPlayed;
+
+        if (!leftOvers[survivors])
+            leftOvers[survivors] = 0;
+        leftOvers[survivors]++;
 
         totalSurvivors += survivors;
         const target = options.city && players.them.attacking && !options.sea ? 0 : 1;
         if (survivors >= target)
             totalVictories++;
     }
-    return [totalVictories/trials, totalSurvivors/trials];
+
+    let totalTrials = 0
+    let killPs = [] // holds non-win stats
+    let survivorPs = [] // holds win stats
+    for (let i = players.us.army.length; i > -players.them.army.length; i--) {
+        if (leftOvers[i] !== undefined) {
+            totalTrials += leftOvers[i];
+            if (i <= 0)
+                killPs.push({kills:players.them.army.length + i, p:totalTrials/trials})
+            else
+                survivorPs.push({survivors:i, p:totalTrials/trials});
+        }
+    }
+    if (killPs.length === 0) // if survivors is always > 0
+        killPs.push({kills:players.them.army.length, p:1}) // then we always kill everything
+    killPs.reverse();
+    survivorPs.reverse();
+
+    return {
+        pVictory: totalVictories/trials,
+        avgSurvivors: totalSurvivors/trials,
+        killPs: killPs,
+        survivorPs: survivorPs,
+        ourLeaderDiedP: ~players.us.army.indexOf('l') ? ourLeaderDied/trials : undefined,
+        theirLeaderDiedP: ~players.them.army.indexOf('l') ? theirLeaderDied/trials : undefined,
+        ourCardsPlayed: players.us.cards.length ? ourCardsPlayed/trials : undefined,
+        theirCardsPlayed: players.them.cards.length ? theirCardsPlayed/trials : undefined,
+        rounds: totalRounds/trials
+    };
 }
 
 function findBestSubsets(options) {
@@ -674,12 +724,12 @@ function findBestSubsets(options) {
                 trialPlayers.us.subsets = ourSubsets;
                 trialPlayers.them.army = theirTrialSubset;
                 trialPlayers.them.subsets = theirSubsets;
-                let pWin = getPvictory(options, trialPlayers, 1000, 1)[0];
+                let pVictory = getPvictory(options, trialPlayers, 2000, 1).pVictory;
 
-                if (!(ourTrialSubset in ourWorst) || ourWorst[ourTrialSubset]['p'] > pWin)
-                    ourWorst[ourTrialSubset] = {p: pWin, opponent: theirTrialSubset};
-                if (!(theirTrialSubset in theirWorst) || theirWorst[theirTrialSubset]['p'] < pWin)
-                    theirWorst[theirTrialSubset] = {p: pWin, opponent: ourTrialSubset};
+                if (!(ourTrialSubset in ourWorst) || ourWorst[ourTrialSubset]['p'] > pVictory)
+                    ourWorst[ourTrialSubset] = {p: pVictory, opponent: theirTrialSubset};
+                if (!(theirTrialSubset in theirWorst) || theirWorst[theirTrialSubset]['p'] < pVictory)
+                    theirWorst[theirTrialSubset] = {p: pVictory, opponent: ourTrialSubset};
             });
         });
 
@@ -709,6 +759,7 @@ export function simulateCombat(options, trials) {
         }
         if (options.sea && C.Leaders[player.leader].naval === false)
             player.leader = C.NOLEADER;
+        player.nPlayedCards = 0;
     })
 
     // first, find the best subsets of each army for each player
@@ -722,6 +773,8 @@ export function simulateCombat(options, trials) {
     logGameState(players, 'found subsets', ourSubsets, theirSubsets);
 
     // then make them fight
-    return getPvictory(options, players, trials, 0, true).concat(players);
-
+    let results = getPvictory(options, players, trials, 0, true);
+    results.ourSubsets = ourSubsets;
+    results.theirSubsets = theirSubsets;
+    return results;
 }
