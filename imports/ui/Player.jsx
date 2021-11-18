@@ -6,7 +6,7 @@ import Paper from '@mui/material/Paper';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
-
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 export const Player = ({playerName, options, onOptionChange, playableCardTypes}) => {
 
@@ -162,22 +162,14 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
             {/* ADD UNITS */}
             <Grid container item spacing={2} className="card-container">
                 <Grid item xs={2}/>
-                <Grid item xs={7}>
+                <Grid item xs={6}>
                     <ButtonGroup>
                         {'lecis'.split('').map(t =>
                             <Tooltip key={t} title={unitType(t)}><Button variant="contained" onClick={fAddUnit(t)}>{t.toUpperCase()}</Button></Tooltip>)}
+                        <Tooltip title={'Rightmost units are killed first except that the leader will be saved on the final roll if his army wins.'}>
+                            <Button variant="text"><HelpOutlineIcon/></Button></Tooltip>
                     </ButtonGroup>
                 </Grid>
-                {options.civ !== C.BARBARIAN && !!~options.army.indexOf('l') && !~options.army.indexOf('s') &&
-                <Grid item xs={3}>
-                    <Tooltip title="Even if it lowers your odds of victory"><FormControlLabel
-                        control={
-                            <Switch
-                                    name="saveLeader"
-                                    checked={Boolean(options.saveLeader)}
-                                    onChange={onCheckboxChange}/>}
-                        label="Save Leader"/></Tooltip>
-                </Grid>}
             </Grid>
 
             {/* CIVILIZATIONS and LEADERS */}

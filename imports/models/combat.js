@@ -146,15 +146,10 @@ function dealCards(us, startingRound, playableCards) {
 function preRoundEffects(options, us, them, round) {
 
     if (leaderInArmy(options, us, C.VIRIATUS) && round > 0 && spendResource(us, 2, 'mood'))
-        applyHits(them, 1, false); // force enemy unit from battle todo don't kill him
-
-    if (leaderInArmy(options, us, C.CLEOPATRA) && round === 0) {
-        if (!spendResource(them, us.abilityValue, 'culture'))
-            applyHits(them, 10); // todo less deathy
-    }
+        them.army = them.army.slice(1);
 
     if (leaderInArmy(options, us, C.AKBAR) && ~us.army.indexOf('e') && round === 0 && spendResource(us, 1, 'ore'))
-        us.akbarPaid = true; // todo the elephants won't be considered in subsets
+        us.akbarPaid = true;
 
     if (leaderInArmy(options, us, C.GOTOBA) && round === 0 && spendResource(us,1, 'ore'))
         us.gotobaPaid = true;
@@ -514,35 +509,20 @@ function postRollBlocks(options, us, them, round) {
     }
 }
 
-function applyHits (player, hits, bestSubset=true) {
+function applyHits (player, hits, theyAreDead) {
     if (hits <= 0)
         return;
 
-    let alive = player.army.length - hits;
-    if (alive <= 0) {
-        if (~player.army.indexOf('l'))
-            player.leaderDied = true;
-        player.army = '';
-        return
-    }
+    let alive = Math.max(0, player.army.length - hits);
 
-    // find the best (first) subset that the original army had
-    const bestCompositions = player.subsets[alive].slice();
-    if (!bestSubset)
-        bestCompositions.reverse(); // or worst
+    const haveLeader = ~player.army.indexOf('l');
+    if (theyAreDead && haveLeader) // if they're dead anyway
+        player.army = 'l' + player.army.replace('l', ''); // then preserve our dear leader
 
-    for (let i = 0; i < bestCompositions.length; i++)
-        if (C.UnitTypes.every(t => bestCompositions[i].count(t) <= player.army.count(t) )) {
-            /*C.UnitTypes.forEach(function(t) {
-                const died = player.army.count(t) - bestCompositions[i].count(t);
-                for (let n = 0; n < died; n++)
-                    player.dead += t;
-            });*/
-            if (~player.army.indexOf('l') && !~bestCompositions[i].indexOf('l'))
-                player.leaderDied = true;
-            player.army = bestCompositions[i];
-            return;
-        }
+    player.army = player.army.slice(0, alive);
+
+    if (!~player.army.indexOf('l') && haveLeader)
+        player.leaderDied = true;
 }
 
 function postCasualtiesEffects(options, us, them, round) {
@@ -558,7 +538,7 @@ function postCasualtiesEffects(options, us, them, round) {
         us.cards.push(UnseenCards.shift());
 
     if (leaderInArmy(options, us, C.DIDO) && !us.attacking && options.city && us.abilityValue)
-        applyHits(them, 10); // todo maybe just flag this another way
+        them.army = ''; // todo maybe just flag this another way
 }
 
 
@@ -613,8 +593,10 @@ export function battle (options, players, startingRound=0, debug=false) {
         postRollBlocks(options, players.them, players.us, round);
         if (debug) logGameState(players, 'applied post roll effects', players.us.cvb, players.them.cvb)
 
-        applyHits(players.us, players.them.cvb['hits'] - players.us.cvb['blocks'])
-        applyHits(players.them, players.us.cvb['hits'] - players.them.cvb['blocks'])
+        const theyAreDead = players.them.army.length - players.us.cvb.hits + players.them.cvb.blocks <= 0
+        const weAreDead = players.us.army.length - players.them.cvb.hits + players.us.cvb.blocks <= 0;
+        applyHits(players.us, players.them.cvb['hits'] - players.us.cvb['blocks'], theyAreDead)
+        applyHits(players.them, players.us.cvb['hits'] - players.them.cvb['blocks'], weAreDead)
         if (debug) logGameState(players, 'applied hits');
 
         postCasualtiesEffects(options, players.us, players.them);
@@ -625,18 +607,6 @@ export function battle (options, players, startingRound=0, debug=false) {
     }
     if (debug) logGameState(players, 'fight over');
     return [players.us.army.length - players.them.army.length, round]
-}
-
-function getArmies(armySize) {
-    if (armySize === 1)
-        return ['s', 'l', 'i', 'c', 'e'];
-    else if (armySize === 2)
-        return ['ss', 'il', 'cl', 'el', 'ii', 'ic', 'ie', 'cc', 'ce', 'ee'];
-    else if (armySize === 3)
-        return ['sss', 'iil', 'icl', 'iel', 'ccl', 'cel', 'eel', 'iii', 'iic', 'iie', 'icc', 'ice', 'iee', 'ccc', 'cce', 'cee', 'eee'];
-    else if (armySize === 4)
-        return ['ssss', 'iiii', 'iiic', 'iiie', 'iicc', 'iice', 'iiee', 'iccc', 'icce', 'icee', 'ieee', 'cccc', 'ccce', 'ccee',
-            'ceee', 'eeee', 'liii', 'liic', 'liie', 'licc', 'lice', 'liee', 'lccc', 'lcce', 'lcee', 'leee'];
 }
 
 export function getPvictory(options, players, trials, startingRound=0, debug) {
@@ -657,8 +627,8 @@ export function getPvictory(options, players, trials, startingRound=0, debug) {
         if (trialPlayers.them.leaderDied)
             theirLeaderDied++;
 
-        ourCardsPlayed += players.us.nCardsPlayed;
-        theirCardsPlayed += players.them.nCardsPlayed;
+        ourCardsPlayed += players.us.nPlayedCards;
+        theirCardsPlayed += players.them.nPlayedCards;
 
         if (!leftOvers[survivors])
             leftOvers[survivors] = 0;
@@ -700,45 +670,6 @@ export function getPvictory(options, players, trials, startingRound=0, debug) {
     };
 }
 
-function findBestSubsets(options) {
-    let ourSubsets = {}, theirSubsets = {};
-    for (let subsetSize = 1; subsetSize < Math.max(options.us.army.length, options.them.army.length); subsetSize++) {
-        function filterArmies(thisPlayer, subsetSize) {
-            let filtered = thisPlayer.army.length > subsetSize && getArmies(subsetSize).filter(a => ['s','l','i','c','e'].every(t => a.count(t) <= thisPlayer.army.count(t)))
-            || [thisPlayer.army];
-            if (thisPlayer.saveLeader && ~thisPlayer.army.indexOf('l')) // if we opt to save the leader, filter out subsets without him
-                filtered = filtered.filter(s => ~s.indexOf('l'))
-            return filtered
-        }
-        // find all subsets of each army
-        let ourTrialSubsets = filterArmies(options.us, subsetSize);
-        let theirTrialSubsets = filterArmies(options.them, subsetSize);
-
-        // make each subset fight each other subset
-        let ourWorst = {};
-        let theirWorst = {};
-        ourTrialSubsets.forEach(function(ourTrialSubset) {
-            theirTrialSubsets.forEach(function(theirTrialSubset) {
-                let trialPlayers = cloneDeep(options);
-                trialPlayers.us.army = ourTrialSubset;
-                trialPlayers.us.subsets = ourSubsets;
-                trialPlayers.them.army = theirTrialSubset;
-                trialPlayers.them.subsets = theirSubsets;
-                let pVictory = getPvictory(options, trialPlayers, 2000, 1).pVictory;
-
-                if (!(ourTrialSubset in ourWorst) || ourWorst[ourTrialSubset]['p'] > pVictory)
-                    ourWorst[ourTrialSubset] = {p: pVictory, opponent: theirTrialSubset};
-                if (!(theirTrialSubset in theirWorst) || theirWorst[theirTrialSubset]['p'] < pVictory)
-                    theirWorst[theirTrialSubset] = {p: pVictory, opponent: ourTrialSubset};
-            });
-        });
-
-        ourSubsets[subsetSize] = Object.entries(ourWorst).sort((a, b) => b[1].p - a[1].p).map(worst => worst[0]);
-        theirSubsets[subsetSize] = Object.entries(theirWorst).sort((a, b) => a[1].p - b[1].p).map(worst => worst[0]);
-    }
-    return [ourSubsets, theirSubsets];
-}
-
 export function simulateCombat(options, trials) {
     options.sea = ~options.us.army.indexOf('s') && ~options.them.army.indexOf('s');
     if (options.sea) {
@@ -762,19 +693,11 @@ export function simulateCombat(options, trials) {
         player.nPlayedCards = 0;
     })
 
-    // first, find the best subsets of each army for each player
-    let [ourSubsets, theirSubsets] = findBestSubsets(options);
 
-    let players = {};     // players is mutable.  Options are not.  So clone players.
-    players.us = cloneDeep(options.us);
+    let players = {};     // players is mutated below.  Options are not.  So clone players.
+    players.us = cloneDeep(options.us); // todo  wait do we need to??
     players.them = cloneDeep(options.them);
-    players.us.subsets = ourSubsets;
-    players.them.subsets = theirSubsets;
-    logGameState(players, 'found subsets', ourSubsets, theirSubsets);
 
     // then make them fight
-    let results = getPvictory(options, players, trials, 0, true);
-    results.ourSubsets = ourSubsets;
-    results.theirSubsets = theirSubsets;
-    return results;
+    return getPvictory(options, players, trials, 0, true);
 }

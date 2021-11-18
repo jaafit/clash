@@ -84,7 +84,7 @@ export const App = () => {
     }
 
     const go = function() {
-        const results = simulateCombat(options, 20000);
+        const results = simulateCombat(options, 30000);
         setOptions(options);
         setResults(results)
         setTimeout(function() {window.scrollTo(0,document.body.scrollHeight)}, 100); // wait for update
