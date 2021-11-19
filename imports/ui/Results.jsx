@@ -6,24 +6,30 @@ import * as C from '../models/components'
 
 export const Results = ({options, results}) => {
     const statSpacing = 1;
+    const statStyle = {p:0.5}
 
     const simpleStat = function(label, value, units='') {
         return (
             <Grid container item xs={12} spacing={statSpacing}>
                 <Grid item xs={2}>{label}</Grid>
-                <Grid item xs={2}><Paper>{value}{units}</Paper></Grid>
+                <Grid item xs={2}><Paper sx={statStyle}>{value}{units}</Paper></Grid>
             </Grid>)
     }
+
     return (
         <Grid container spacing={1}>
+
             <Grid container item xs={12} spacing={statSpacing}>
-                <Grid item xs={2}>Chance you {!options.sea && options.city && !options.us.attacking ? 'do not lose' : 'win'}</Grid>
-                <Grid item xs={2}><Paper>{Math.round(results.pVictory*100)}%</Paper></Grid>
+                <Grid item xs={2}>Chance you win/draw/lose</Grid>
+                <Grid item xs={4}><Paper sx={statStyle}>
+                    {Math.round(results.pWinDrawLose[0]*100)}% /&nbsp;
+                    {Math.round(results.pWinDrawLose[1]*100)}% /&nbsp;
+                    {Math.round(results.pWinDrawLose[2]*100)}%</Paper></Grid>
             </Grid>
 
             {results.avgSurvivors && <Grid container item xs={12} spacing={statSpacing}>
                 <Grid item xs={2}>Avg units rem.</Grid>
-                <Grid item xs={4}><Paper>{results.avgSurvivors>0?'You have ':'They have '} {Math.round(Math.abs(results.avgSurvivors)*10)/10}</Paper></Grid>
+                <Grid item xs={4}><Paper sx={statStyle}>{results.avgSurvivors>0?'You have ':'They have '} {Math.round(Math.abs(results.avgSurvivors)*10)/10}</Paper></Grid>
             </Grid>}
 
             {results.killPs && <Grid container item xs={12} spacing={statSpacing}>
@@ -32,7 +38,7 @@ export const Results = ({options, results}) => {
                 </Grid>
                 {results.killPs.map(stat =>
                     <Grid item key={stat.kills} xs={2}>
-                        <Paper>{stat.kills}+ = {Math.round(stat.p*100)}%</Paper>
+                        <Paper sx={statStyle}>{stat.kills}+ = {Math.round(stat.p*100)}%</Paper>
                     </Grid>)}
             </Grid>}
             {results.survivorPs && <Grid container item xs={12} spacing={statSpacing}>
@@ -41,7 +47,7 @@ export const Results = ({options, results}) => {
                 </Grid>
                 {results.survivorPs.map(stat =>
                     <Grid item key={stat.survivors} xs={2}>
-                        <Paper>{stat.survivors}+ = {Math.round(stat.p*100)}%</Paper>
+                        <Paper sx={statStyle}>{stat.survivors}+ = {Math.round(stat.p*100)}%</Paper>
                     </Grid>)}
             </Grid>}
 

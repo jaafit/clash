@@ -615,6 +615,7 @@ export function getPvictory(options, players, trials, startingRound=0, debug) {
     let theirLeaderDied = 0, ourLeaderDied = 0;
     let ourCardsPlayed = 0, theirCardsPlayed = 0;
     let totalRounds = 0;
+    let losses = 0, draws = 0, wins = 0;
 
     for (let i = 0; i < trials; i++) {
         let trialPlayers = cloneDeep(players);
@@ -635,9 +636,26 @@ export function getPvictory(options, players, trials, startingRound=0, debug) {
         leftOvers[survivors]++;
 
         totalSurvivors += survivors;
+
         const target = options.city && players.them.attacking && !options.sea ? 0 : 1;
         if (survivors >= target)
             totalVictories++;
+
+        if (survivors > 0)
+            wins++;
+        else if (survivors === 0) {
+            // if a fort cleared the board in 1 round, then that's not a draw
+            if (options.fort && rounds === 1) {
+                if (players.us.attacking)
+                    losses++; // todo check this interpretation
+                else
+                    wins++;
+            }
+            else
+                draws++;
+        }
+        else
+            losses++;
     }
 
     let totalTrials = 0
@@ -659,6 +677,7 @@ export function getPvictory(options, players, trials, startingRound=0, debug) {
 
     return {
         pVictory: totalVictories/trials,
+        pWinDrawLose: [wins/trials, draws/trials, losses/trials],
         avgSurvivors: totalSurvivors/trials,
         killPs: killPs,
         survivorPs: survivorPs,

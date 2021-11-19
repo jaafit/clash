@@ -8,7 +8,7 @@ import {ThemeProvider, createTheme} from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Container from '@mui/material/Container';
 import Paper from '@mui/material/Paper';
-import ShieldIcon from '@mui/icons-material/Shield';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 
 export const App = () => {
@@ -106,7 +106,7 @@ export const App = () => {
             <CssBaseline>
             <Container fixed>
                 <Grid container spacing={2}>
-                    <Grid item xs={9}><h3>Clash of Cultures Combat Simulator</h3></Grid>
+                    <Grid item xs={9}><h3>Clash M.E. Simulator</h3></Grid>
                     <Grid item xs={3}><Button endIcon={<RotateLeftIcon/>} onClick={onReset}>Reset</Button></Grid>
 
                     <Grid container item xs={12} spacing={3}>
@@ -128,7 +128,7 @@ export const App = () => {
                     </Grid>
 
                     <Grid item xs={12}>
-                        <Button variant="contained" size="large" onClick={go} endIcon={<ShieldIcon/>}>Go</Button>
+                        <Button variant="contained" size="large" onClick={go} endIcon={<PlayCircleOutlineIcon/>}>Go</Button>
                     </Grid>
                     <Grid item xs={12}>
                         {results.pVictory !== undefined && <Results options={options} results={results} />}

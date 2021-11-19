@@ -7,6 +7,8 @@ import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import Box from '@mui/material/Box';
+
 
 export const Player = ({playerName, options, onOptionChange, playableCardTypes}) => {
 
@@ -199,7 +201,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
             {C.Leaders[options.leader].ability &&
             <Grid container item className="card-container">
                 <Grid item xs={3}>
-                    <div className="float-end">{C.Leaders[options.leader].ability}</div>
+                    <Box sx={{p:1}}>{C.Leaders[options.leader].ability}</Box>
                 </Grid>
                 {C.Leaders[options.leader].type === 'Boolean' &&
                     <Grid item xs={9}><Tooltip title={'Does this ability apply here?'}>
@@ -216,7 +218,7 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                                 onChange={onGenericNumberChange}/>
                     </Grid>
                     <Grid item xs={3}>
-                        {(options.abilityValue || 0) + ' ' + C.Leaders[options.leader].units}
+                        <Box sx={{p:1}}>{(options.abilityValue || 0) + ' ' + C.Leaders[options.leader].units}</Box>
                     </Grid>
                     </>
                     }
@@ -249,12 +251,15 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
 
                             {C.Advances[a].type === "Integer" &&
                                 <Grid container>
-                                    <Grid item xs={12}>
+                                    <Grid item xs={10}>
                                         <Slider aria-label={Number(options.advances[a]) + ' ' + C.Advances[a].units}
                                                 name={a}
                                                 min={C.Advances[a].min}
                                                 max={C.Advances[a].max}
-                                                defaultValue={Number(Number(options.advances[a]))} onChange={onAdvanceValueChange}/>
+                                                value={Number(Number(options.advances[a]))} onChange={onAdvanceValueChange}/>
+                                    </Grid>
+                                    <Grid item xs={2}>
+                                        <Box sx={{p:1}}>{options.advances[a]}</Box>
                                     </Grid>
                                 </Grid>
                             }
@@ -317,10 +322,10 @@ export const Player = ({playerName, options, onOptionChange, playableCardTypes})
                             {resources.map(r =>
                             <React.Fragment key={r}>
                                 <Grid item xs={3} sm={2} md={1} lg={2}>
-                                    <Slider type="text" name={r} min={0} max={7} value={options.resources[r]} onChange={onChangeResource}/>
+                                     <Tooltip title={r}><Slider type="text" name={r} min={0} max={7} value={options.resources[r]} onChange={onChangeResource}/></Tooltip>
                                 </Grid>
                                 <Grid item xs={1}>
-                                    {options.resources[r]}{r[0]}
+                                    {options.resources[r]}{r[0].toUpperCase()}
                                 </Grid>
                             </React.Fragment>)}
                         </Grid>
